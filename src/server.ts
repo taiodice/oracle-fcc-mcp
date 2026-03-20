@@ -11,6 +11,24 @@ import { z } from "zod";
 
 import { FccClientManager } from "./fcc-client-manager.js";
 import { ToolResult } from "./types.js";
+
+function unconfiguredResult(errorMessage: string): ToolResult {
+  return {
+    success: false,
+    message:
+      `Oracle FCC MCP server is not configured. ${errorMessage}\n\n` +
+      `Set one of:\n` +
+      `  Option A (single tenant):\n` +
+      `    FCC_URL=https://your-instance.oraclecloud.com\n` +
+      `    FCC_APP_NAME=YourAppName\n` +
+      `    FCC_AUTH_METHOD=basic  (or oauth)\n` +
+      `    FCC_USERNAME=user@example.com\n` +
+      `    FCC_PASSWORD=yourpassword\n\n` +
+      `  Option B (multi-tenant):\n` +
+      `    FCC_TENANTS_CONFIG=/path/to/tenants.json\n\n` +
+      `See README.md for tenants.json format.`,
+  };
+}
 import { registerConnectionTools } from "./tools/connection.js";
 import { registerConsolidationTools } from "./tools/consolidation.js";
 import { registerDataTools } from "./tools/data.js";
@@ -45,6 +63,23 @@ export async function createServer(manager: FccClientManager): Promise<Server> {
     tools.push({ name, description, inputSchema: schema, handler });
   }
 
+  // Diagnostic tool — always works regardless of config state
+  registerTool(
+    "fcc_show_config_status",
+    "Show the current configuration status of the Oracle FCC MCP server. Use this first if other tools are failing or if you are unsure whether the server is configured correctly.",
+    { type: "object", properties: {}, required: [] },
+    async () => {
+      const err = manager.getConfigError();
+      if (err) return unconfiguredResult(err);
+      const tenants = manager.listTenants();
+      return {
+        success: true,
+        message: `Server configured with ${tenants.length} tenant(s).`,
+        data: { configured: true, tenants, default_tenant: manager.getDefaultTenantName() },
+      };
+    }
+  );
+
   // Register all tool groups
   registerConnectionTools(manager, registerTool);
   registerConsolidationTools(manager, registerTool);
@@ -76,6 +111,17 @@ export async function createServer(manager: FccClientManager): Promise<Server> {
         content: [{ type: "text", text: `Unknown tool: ${name}` }],
         isError: true,
       };
+    }
+
+    if (name !== "fcc_show_config_status") {
+      const configErr = manager.getConfigError();
+      if (configErr) {
+        const result = unconfiguredResult(configErr);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          isError: true,
+        };
+      }
     }
 
     try {
