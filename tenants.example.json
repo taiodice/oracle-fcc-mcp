@@ -1,0 +1,27 @@
+{
+  "default": "production",
+  "tenants": {
+    "production": {
+      "url": "https://prod-mycompany.epm.us2.oraclecloud.com",
+      "app": "FCC_PROD",
+      "auth": "oauth",
+      "idcs_url": "https://idcs-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.identity.oraclecloud.com",
+      "client_id": "your_prod_client_id",
+      "client_secret": "your_prod_client_secret"
+    },
+    "uat": {
+      "url": "https://uat-mycompany.epm.us2.oraclecloud.com",
+      "app": "FCC_UAT",
+      "auth": "basic",
+      "username": "admin@company.com",
+      "password": "YourUATPassword"
+    },
+    "dev": {
+      "url": "https://dev-mycompany.epm.us2.oraclecloud.com",
+      "app": "FCC_DEV",
+      "auth": "basic",
+      "username": "dev_user@company.com",
+      "password": "YourDevPassword"
+    }
+  }
+}
