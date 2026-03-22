@@ -19,13 +19,27 @@ export function registerMetadataTools(manager: FccClientManager, registerTool: R
       },
       required: [],
     },
-    async (args) => {
-      const client = manager.getClient(args.tenant as string | undefined);
-      const res = await client.get<{ items: unknown[] }>(client.appPath("/dimensions"));
+    async () => {
+      // No GET .../dimensions endpoint exists in Oracle REST API — return hardcoded FCCS standard dimensions
+      const fccsDimensions = [
+        { name: "Entity", description: "Legal entities and organizational structure" },
+        { name: "Account", description: "Chart of accounts (FCCS_Total Assets, Revenue, etc.)" },
+        { name: "Scenario", description: "Data versions (Actual, Budget, Forecast)" },
+        { name: "Year", description: "Fiscal years (FY24, FY25)" },
+        { name: "Period", description: "Time periods (Jan, Feb, Q1, YearTotal)" },
+        { name: "View", description: "Aggregation type (Periodic, YTD, CYTD)" },
+        { name: "Value", description: "Currency layer (Entity Input, Parent Currency Total)" },
+        { name: "Currency", description: "Reporting currencies (USD, EUR, GBP)" },
+        { name: "Intercompany", description: "Intercompany partner tracking" },
+        { name: "Movement", description: "Balance sheet movement types (FCCS_OpeningBalance, FCCS_Mvmts_Total)" },
+        { name: "Multi-GAAP", description: "GAAP adjustment layer (FCCS_No Multi-GAAP)" },
+        { name: "Data Source", description: "Source tracking (FCCS_No Data Source)" },
+        { name: "Consolidation", description: "System dimension (FCCS_Entity Input)" },
+      ];
       return {
         success: true,
-        message: `Found ${res.items?.length ?? 0} dimensions.`,
-        data: res.items,
+        message: `FCCS has ${fccsDimensions.length} standard dimensions.`,
+        data: fccsDimensions,
       };
     }
   );
@@ -58,25 +72,72 @@ export function registerMetadataTools(manager: FccClientManager, registerTool: R
     },
     async (args) => {
       const client = manager.getClient(args.tenant as string | undefined);
-      const dim = encodeURIComponent(args.dimension as string);
+      const dim = args.dimension as string;
+      const parent = args.parent as string | undefined;
+      const search = args.search as string | undefined;
 
-      const params = new URLSearchParams();
-      if (args.parent) params.set("parent", args.parent as string);
-      if (args.search) params.set("memberName", args.search as string);
-      if (args.include_descendants) params.set("descendants", "true");
-      if (args.fields) params.set("fields", args.fields as string);
-      if (args.limit) params.set("limit", String(args.limit));
+      // If a specific member name is given via search, use single-member GET endpoint
+      if (search && !parent) {
+        try {
+          const member = await client.get<Record<string, unknown>>(
+            client.appPath(`/dimensions/${encodeURIComponent(dim)}/members/${encodeURIComponent(search)}`)
+          );
+          return {
+            success: true,
+            message: `Found member "${search}" in dimension "${dim}".`,
+            data: [member],
+          };
+        } catch (err) {
+          return {
+            success: false,
+            message: `Member "${search}" not found in "${dim}": ${(err as Error).message}`,
+          };
+        }
+      }
 
-      const query = params.toString() ? `?${params.toString()}` : "";
-      const res = await client.get<{ items: unknown[] }>(
-        client.appPath(`/dimensions/${dim}/members${query}`)
-      );
+      // For listing children/descendants, use exportdataslice with the dimension on rows
+      // No bulk members query endpoint exists in Oracle REST API
+      const parentMember = parent || getDefaultRoot(dim);
+      const memberFunc = args.include_descendants
+        ? `IDescendants(${parentMember})`
+        : `IChildren(${parentMember})`;
 
-      return {
-        success: true,
-        message: `Found ${res.items?.length ?? 0} member(s) in dimension "${args.dimension}".`,
-        data: res.items,
-      };
+      try {
+        const gridDef = {
+          exportPlanningData: false,
+          gridDefinition: {
+            suppressMissingBlocks: true,
+            suppressMissingRows: false,
+            suppressMissingColumns: true,
+            pov: {
+              dimensions: ["Scenario", "Year", "View", "Value"],
+              members: [["Actual"], ["FY25"], ["Periodic"], ["Entity Input"]],
+            },
+            columns: [{ dimensions: ["Period"], members: [["Jan"]] }],
+            rows: [{ dimensions: [dim], members: [[memberFunc]] }],
+          },
+        };
+
+        const res = await client.post<{ rows?: Array<{ headers: string[]; data: string[] }> }>(
+          client.planPath("Consol", "/exportdataslice"),
+          gridDef
+        );
+
+        const members = (res.rows ?? []).map((r) => ({
+          memberName: r.headers?.[0],
+        }));
+
+        return {
+          success: true,
+          message: `Found ${members.length} member(s) in "${dim}" under "${parentMember}".`,
+          data: members,
+        };
+      } catch (err) {
+        return {
+          success: false,
+          message: `Could not list members for "${dim}": ${(err as Error).message}. Try using fcc_export_data or fcc_query_mdx for more flexible member queries.`,
+        };
+      }
     }
   );
 
@@ -156,4 +217,21 @@ export function registerMetadataTools(manager: FccClientManager, registerTool: R
       };
     }
   );
+}
+
+// Default root members for FCCS dimensions (used with IChildren/IDescendants)
+function getDefaultRoot(dimension: string): string {
+  const roots: Record<string, string> = {
+    Entity: "Total Geography",
+    Account: "FCCS_Total Assets",
+    Scenario: "Scenario",
+    Year: "Years",
+    Period: "Period",
+    Currency: "Currency",
+    Intercompany: "FCCS_Total Intercompany",
+    Movement: "FCCS_Mvmts_Total",
+    View: "View",
+    Value: "Value",
+  };
+  return roots[dimension] || dimension;
 }
