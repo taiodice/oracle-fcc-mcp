@@ -92,32 +92,25 @@ export function registerConsolidationTools(manager: FccClientManager, registerTo
     async (args) => {
       const client = manager.getClient(args.tenant as string | undefined);
 
-      // Export data slice with consolidation status dimension
-      // FCC consolidation status is typically retrieved via exportdataslice
-      // with the ConsolidationStatus or similar system dimension
-      const planTypes = await client.get<{ items: Array<{ name: string }> }>(
-        client.appPath("/plantypes")
-      );
-      const planType = planTypes.items?.[0]?.name || "FCM";
-
       const entities = args.entities as string[];
       const gridDef = {
         exportPlanningData: false,
         gridDefinition: {
+          suppressMissingBlocks: true,
+          suppressMissingRows: false,
+          suppressMissingColumns: true,
           pov: {
-            dimensions: ["Scenario", "Year", "Period"],
-            members: [[args.scenario], [args.year], [args.period]],
+            dimensions: ["Scenario", "Year", "Period", "View", "Value"],
+            members: [[args.scenario], [args.year], [args.period], ["Periodic"], ["Entity Input"]],
           },
           rows: [{ dimensions: ["Entity"], members: [entities] }],
-          columns: [{ dimensions: ["Account"], members: [["[None]"]] }],
+          columns: [{ dimensions: ["Account"], members: [["FCCS_Total Assets"]] }],
         },
-        suppressMissingBlocks: true,
-        suppressMissingRows: false,
       };
 
       try {
         const res = await client.post<unknown>(
-          client.planPath(planType, "/exportdataslice"),
+          client.planPath("Consol", "/exportdataslice"),
           gridDef
         );
         return {

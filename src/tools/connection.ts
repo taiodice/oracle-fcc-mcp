@@ -106,23 +106,28 @@ export function registerConnectionTools(
       const client = manager.getClient(args.tenant as string | undefined);
       const app = client.app;
 
-      const [dimsRes, planTypesRes, subvarsRes] = await Promise.allSettled([
-        client.get<{ items: unknown[] }>(client.appPath("/dimensions")),
-        client.get<{ items: unknown[] }>(client.appPath("/plantypes")),
-        client.get<{ items: unknown[] }>(client.appPath("/substitutionvariables")),
-      ]);
+      // Hardcoded FCCS dimensions — no GET .../dimensions endpoint exists
+      const fccsDimensions = [
+        "Entity", "Account", "Scenario", "Year", "Period", "View", "Value",
+        "Currency", "Intercompany", "Movement", "Multi-GAAP", "Data Source", "Consolidation",
+      ];
 
-      const dimensions = dimsRes.status === "fulfilled" ? dimsRes.value.items : [];
-      const planTypes = planTypesRes.status === "fulfilled" ? planTypesRes.value.items : [];
-      const subvars = subvarsRes.status === "fulfilled" ? subvarsRes.value.items : [];
+      // Only fetch substitution variables — the one endpoint that always works
+      let subvars: unknown[] = [];
+      try {
+        const res = await client.get<{ items: unknown[] }>(client.appPath("/substitutionvariables"));
+        subvars = res.items ?? [];
+      } catch {
+        // Non-critical — continue without sub vars
+      }
 
       return {
         success: true,
-        message: `App info for ${app}: ${Array.isArray(dimensions) ? dimensions.length : 0} dimensions, ${Array.isArray(planTypes) ? planTypes.length : 0} plan types.`,
+        message: `App info for ${app}: ${fccsDimensions.length} FCCS dimensions, plan type: Consol.`,
         data: {
           app,
-          dimensions,
-          planTypes,
+          dimensions: fccsDimensions,
+          planTypes: ["Consol"],
           substitutionVariables: subvars,
         },
       };

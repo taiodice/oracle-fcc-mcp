@@ -6,6 +6,14 @@ import { ToolResult } from "../types.js";
 
 type RegisterFn = (name: string, description: string, schema: object, handler: (args: Record<string, unknown>) => Promise<ToolResult>) => void;
 
+// FCCS system accounts for ownership data
+const OWNERSHIP_ACCOUNTS = [
+  "FCCS_Percent Consol",
+  "FCCS_Percent Ownership",
+  "FCCS_Percent Minority Interest",
+  "FCCS_Control",
+];
+
 export function registerOwnershipTools(manager: FccClientManager, registerTool: RegisterFn): void {
 
   // ─── fcc_get_ownership ───────────────────────────────────────────────────
@@ -17,7 +25,7 @@ export function registerOwnershipTools(manager: FccClientManager, registerTool: 
       properties: {
         entity: { type: "string", description: "Entity name" },
         period: { type: "string", description: "Period (e.g., 'Jan', 'Q1')" },
-        year: { type: "string", description: "Year (e.g., 'FY2024')" },
+        year: { type: "string", description: "Year (e.g., 'FY25')" },
         scenario: { type: "string", description: "Scenario (e.g., 'Actual')" },
         tenant: { type: "string", description: "Tenant name (optional)" },
       },
@@ -26,30 +34,57 @@ export function registerOwnershipTools(manager: FccClientManager, registerTool: 
     async (args) => {
       const client = manager.getClient(args.tenant as string | undefined);
 
-      // FCC ownership endpoint — verify from Oracle FCC REST API docs
-      // Likely: /HyperionPlanning/rest/v3/applications/{app}/ownership
-      // with query parameters for entity/period/year/scenario
-      const params = new URLSearchParams({
-        entity: args.entity as string,
-        period: args.period as string,
-        year: args.year as string,
-        scenario: args.scenario as string,
-      });
+      // No /ownership endpoint exists — use exportdataslice with FCCS ownership system accounts
+      const gridDef = {
+        exportPlanningData: false,
+        gridDefinition: {
+          suppressMissingBlocks: true,
+          suppressMissingRows: false,
+          suppressMissingColumns: true,
+          pov: {
+            dimensions: ["Scenario", "Year", "Period", "Entity", "View"],
+            members: [
+              [args.scenario as string],
+              [args.year as string],
+              [args.period as string],
+              [args.entity as string],
+              ["Periodic"],
+            ],
+          },
+          columns: [{ dimensions: ["Value"], members: [["Entity Input"]] }],
+          rows: [{ dimensions: ["Account"], members: [OWNERSHIP_ACCOUNTS] }],
+        },
+      };
 
       try {
-        const res = await client.get<unknown>(
-          client.appPath(`/ownership?${params.toString()}`)
+        const res = await client.post<{ rows?: Array<{ headers: string[]; data: string[] }> }>(
+          client.planPath("Consol", "/exportdataslice"),
+          gridDef
         );
+
+        // Parse ownership data from the grid response
+        const ownership: Record<string, string> = {};
+        for (const row of res.rows ?? []) {
+          if (row.headers?.[0] && row.data?.[0]) {
+            ownership[row.headers[0]] = row.data[0];
+          }
+        }
+
         return {
           success: true,
           message: `Ownership data for ${args.entity} in ${args.period} ${args.year} ${args.scenario}.`,
-          data: res,
+          data: {
+            entity: args.entity,
+            period: args.period,
+            year: args.year,
+            scenario: args.scenario,
+            ...ownership,
+          },
         };
       } catch (err) {
-        // Ownership may be retrieved via exportdataslice with ownership dimensions
         return {
           success: false,
-          message: `Could not retrieve ownership data: ${(err as Error).message}. Note: The ownership endpoint path must be verified from Oracle FCC REST API documentation.`,
+          message: `Could not retrieve ownership data: ${(err as Error).message}`,
           data: { entity: args.entity, period: args.period, year: args.year, scenario: args.scenario },
         };
       }
@@ -59,7 +94,7 @@ export function registerOwnershipTools(manager: FccClientManager, registerTool: 
   // ─── fcc_update_ownership ────────────────────────────────────────────────
   registerTool(
     "fcc_update_ownership",
-    "Update ownership parameters for an entity: consolidation method, percent consolidation, percent ownership, and minority interest.",
+    "Update ownership parameters for an entity: percent consolidation, percent ownership, and minority interest via importdataslice.",
     {
       type: "object",
       properties: {
@@ -67,27 +102,9 @@ export function registerOwnershipTools(manager: FccClientManager, registerTool: 
         period: { type: "string", description: "Period" },
         year: { type: "string", description: "Year" },
         scenario: { type: "string", description: "Scenario" },
-        consolidation_method: {
-          type: "string",
-          description: "Consolidation method (e.g., 'Proportional', 'Equity', 'Global', 'None')",
-        },
-        percent_consolidation: {
-          type: "number",
-          description: "Percent consolidation (0-100)",
-        },
-        percent_ownership: {
-          type: "number",
-          description: "Percent ownership (0-100)",
-        },
-        percent_minority_interest: {
-          type: "number",
-          description: "Percent minority interest (0-100)",
-        },
-        control: {
-          type: "string",
-          enum: ["Controlling", "NonControlling"],
-          description: "Control status",
-        },
+        percent_consolidation: { type: "number", description: "Percent consolidation (0-100)" },
+        percent_ownership: { type: "number", description: "Percent ownership (0-100)" },
+        percent_minority_interest: { type: "number", description: "Percent minority interest (0-100)" },
         tenant: { type: "string", description: "Tenant name (optional)" },
       },
       required: ["entity", "period", "year", "scenario"],
@@ -95,33 +112,54 @@ export function registerOwnershipTools(manager: FccClientManager, registerTool: 
     async (args) => {
       const client = manager.getClient(args.tenant as string | undefined);
 
-      const updatePayload: Record<string, unknown> = {
-        entity: args.entity,
-        period: args.period,
-        year: args.year,
-        scenario: args.scenario,
+      // Build rows for each ownership value to update
+      const rows: Array<{ headers: string[]; data: string[] }> = [];
+      if (args.percent_consolidation !== undefined) {
+        rows.push({ headers: ["FCCS_Percent Consol"], data: [String(args.percent_consolidation)] });
+      }
+      if (args.percent_ownership !== undefined) {
+        rows.push({ headers: ["FCCS_Percent Ownership"], data: [String(args.percent_ownership)] });
+      }
+      if (args.percent_minority_interest !== undefined) {
+        rows.push({ headers: ["FCCS_Percent Minority Interest"], data: [String(args.percent_minority_interest)] });
+      }
+
+      if (rows.length === 0) {
+        return { success: false, message: "No ownership values provided to update." };
+      }
+
+      // No /ownership endpoint exists — use importdataslice to write ownership system accounts
+      const payload = {
+        aggregateEssbaseData: false,
+        cellNotesOption: "Overwrite",
+        dataGrid: {
+          pov: [args.scenario, args.year, args.period, args.entity, "Periodic", "Entity Input"],
+          columns: [["Entity Input"]],
+          rows,
+        },
       };
 
-      if (args.consolidation_method !== undefined) updatePayload.consolidationMethod = args.consolidation_method;
-      if (args.percent_consolidation !== undefined) updatePayload.percentConsolidation = args.percent_consolidation;
-      if (args.percent_ownership !== undefined) updatePayload.percentOwnership = args.percent_ownership;
-      if (args.percent_minority_interest !== undefined) updatePayload.percentMinorityInterest = args.percent_minority_interest;
-      if (args.control !== undefined) updatePayload.control = args.control;
-
       try {
-        const res = await client.put<unknown>(
-          client.appPath("/ownership"),
-          updatePayload
+        const res = await client.post<{
+          numAcceptedCells?: number;
+          numRejectedCells?: number;
+        }>(
+          client.planPath("Consol", "/importdataslice"),
+          payload
         );
+
+        const accepted = res.numAcceptedCells ?? 0;
+        const rejected = res.numRejectedCells ?? 0;
+
         return {
-          success: true,
-          message: `Ownership updated for ${args.entity} in ${args.period} ${args.year} ${args.scenario}.`,
+          success: rejected === 0,
+          message: `Ownership updated for ${args.entity}: ${accepted} cells accepted, ${rejected} rejected.`,
           data: res,
         };
       } catch (err) {
         return {
           success: false,
-          message: `Ownership update failed: ${(err as Error).message}. Note: Verify the ownership update endpoint from Oracle FCC REST API documentation.`,
+          message: `Ownership update failed: ${(err as Error).message}`,
         };
       }
     }
@@ -136,7 +174,7 @@ export function registerOwnershipTools(manager: FccClientManager, registerTool: 
       properties: {
         parent_entity: {
           type: "string",
-          description: "Start browsing from this entity (optional — uses root if not specified)",
+          description: "Start browsing from this entity (default: 'Total Geography')",
         },
         depth: {
           type: "number",
@@ -148,28 +186,55 @@ export function registerOwnershipTools(manager: FccClientManager, registerTool: 
     },
     async (args) => {
       const client = manager.getClient(args.tenant as string | undefined);
+      const parent = (args.parent_entity as string) || "Total Geography";
       const depth = (args.depth as number) ?? 1;
-      const includeDescendants = depth === 0;
 
-      // Use standard dimension members API for Entity dimension
-      const parent = args.parent_entity as string | undefined;
-      const params = new URLSearchParams({
-        memberName: parent || "Total Geography",
-        fields: "memberName,alias,parent,generation,consolidation",
-      });
-      if (includeDescendants) {
-        params.set("descendants", "true");
+      // Try single-member GET first for the parent entity info
+      try {
+        const memberInfo = await client.get<Record<string, unknown>>(
+          client.appPath(`/dimensions/Entity/members/${encodeURIComponent(parent)}`)
+        );
+
+        // Then use exportdataslice to get children
+        const memberFunc = depth === 0 ? `IDescendants(${parent})` : `IChildren(${parent})`;
+        const gridDef = {
+          exportPlanningData: false,
+          gridDefinition: {
+            suppressMissingBlocks: true,
+            suppressMissingRows: false,
+            suppressMissingColumns: true,
+            pov: {
+              dimensions: ["Scenario", "Year", "Period", "View", "Value"],
+              members: [["Actual"], ["FY25"], ["Jan"], ["Periodic"], ["Entity Input"]],
+            },
+            columns: [{ dimensions: ["Account"], members: [["FCCS_Total Assets"]] }],
+            rows: [{ dimensions: ["Entity"], members: [[memberFunc]] }],
+          },
+        };
+
+        const res = await client.post<{ rows?: Array<{ headers: string[]; data: string[] }> }>(
+          client.planPath("Consol", "/exportdataslice"),
+          gridDef
+        );
+
+        const children = (res.rows ?? []).map((r) => ({
+          memberName: r.headers?.[0],
+        }));
+
+        return {
+          success: true,
+          message: `Entity hierarchy from "${parent}": ${children.length} entities found.`,
+          data: {
+            parent: memberInfo,
+            children,
+          },
+        };
+      } catch (err) {
+        return {
+          success: false,
+          message: `Could not retrieve entity hierarchy: ${(err as Error).message}. Try using fcc_query_mdx with an Entity hierarchy MDX query.`,
+        };
       }
-
-      const res = await client.get<{ items: unknown[] }>(
-        client.appPath(`/dimensions/Entity/members?${params.toString()}`)
-      );
-
-      return {
-        success: true,
-        message: `Entity hierarchy from "${parent || "root"}": ${res.items?.length ?? 0} entities found.`,
-        data: res.items,
-      };
     }
   );
 }
