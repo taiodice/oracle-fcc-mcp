@@ -110,10 +110,10 @@ const TOOL_CATEGORY_MAP: Record<string, AuditCategory> = {
 // ── Logger class ─────────────────────────────────────────────────────────────
 
 class AuditLogger {
-  private store: Store;
+  private store: Store<{ entries: AuditEntry[] }>;
 
   constructor() {
-    this.store = new Store({
+    this.store = new Store<{ entries: AuditEntry[] }>({
       name: "fcc-commander-audit",
       defaults: {
         entries: [] as AuditEntry[],

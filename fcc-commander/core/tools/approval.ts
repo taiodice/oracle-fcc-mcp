@@ -3,7 +3,6 @@
 
 import { FccClientManager } from "../fcc-client-manager.js";
 import { ToolResult, ApprovalTreeNode } from "../types.js";
-import { jobStatusLabel } from "../fcc-client.js";
 
 type RegisterFn = (name: string, description: string, schema: object, handler: (args: Record<string, unknown>) => Promise<ToolResult>) => void;
 
@@ -25,7 +24,7 @@ function buildTroubleshooting(errorMsg: string): string[] {
   }
   if (lower.includes("404") || lower.includes("not found")) {
     hints.push("The API endpoint was not found — verify the Environment URL and Application Name are correct.");
-    hints.push("Confirm the application name matches exactly (e.g., 'FCCS' not 'fccs').");
+    hints.push("Confirm the application name in Settings matches exactly (case-sensitive) — e.g., 'ELEMPROD' not 'elemprod' or a typo.");
   }
   if (lower.includes("405") || lower.includes("method not allowed")) {
     hints.push("The API endpoint does not support this request method — the FCC REST API version may differ from expected.");
@@ -348,116 +347,46 @@ export function registerApprovalTools(manager: FccClientManager, registerTool: R
       const year = args.year as string;
       const comment = args.comment as string | undefined;
       const startTime = Date.now();
-      const timeoutMs = ((args.timeout_minutes as number) || 10) * 60 * 1000;
+
+      const actionIdMap: Record<string, string> = {
+        promote: "PROMOTE",
+        reject: "REJECT",
+        approve: "APPROVE",
+        sign_off: "SIGN_OFF",
+        start: "ORIGINATE",
+      };
+      const actionId = actionIdMap[action] ?? action.toUpperCase();
+
+      // pmMembers: comma-separated quoted entity names, e.g. "Entity_A","Entity_B"
+      const pmMembersStr = entities.map((e) => `"${e}"`).join(",");
 
       const results: Array<{
         period: string;
-        entity: string;
         success: boolean;
         message: string;
-        jobId?: number;
       }> = [];
       const warnings: string[] = [];
 
       for (const period of periods) {
-        for (const entity of entities) {
-          try {
-            let operationSuccess = false;
-            let operationMessage = "";
-            let operationJobId: number | undefined;
+        // The puhIdentifier uses the encoded Scenario::"Year" format
+        // Oracle encoding: space→%20, quote→%22, colons stay as ::
+        const puId = client.encodePuId(scenario, year);
+        const formParts = [`actionId=${actionId}`, `pmMembers=${pmMembersStr}`];
+        if (comment) formParts.push(`comments=${encodeURIComponent(comment)}`);
+        // Also pass period if the FCC application needs it
+        formParts.push(`period=${encodeURIComponent(period)}`);
+        const formBody = formParts.join("&");
 
-            try {
-              // Primary approach: Use Planning Units actions API
-              // First, find the planning unit ID for this entity/period
-              const puQuery = encodeURIComponent(JSON.stringify({
-                scenario, version: year, period, entity,
-              }));
-
-              const puRes = await client.postNoBody<{
-                items?: Array<{ id?: number; planningUnitId?: number }>;
-                planningUnits?: Array<{ id?: number; planningUnitId?: number }>;
-              }>(
-                client.appPath(`/planningunits?q=${puQuery}`)
-              );
-
-              const units = puRes.items ?? puRes.planningUnits ?? [];
-              if (units.length > 0) {
-                const puId = units[0].id ?? units[0].planningUnitId;
-
-                if (puId) {
-                  // Use the actions endpoint
-                  const actionPayload: Record<string, unknown> = { action };
-                  if (comment) actionPayload.comment = comment;
-
-                  const actionRes = await client.post<{ status?: string; message?: string; jobId?: number }>(
-                    client.appPath(`/planningunits/${puId}/actions`),
-                    actionPayload
-                  );
-
-                  if (actionRes.jobId) {
-                    const jobStatus = await client.pollJob(actionRes.jobId, timeoutMs);
-                    operationSuccess = jobStatus.status === 0 || jobStatus.status === 1;
-                    operationMessage = jobStatusLabel(jobStatus.status);
-                    operationJobId = actionRes.jobId;
-                    if (jobStatus.status === 1) {
-                      warnings.push(`${entity}/${period}: completed with warnings`);
-                    }
-                  } else {
-                    operationSuccess = true;
-                    operationMessage = actionRes.status ?? actionRes.message ?? "Success";
-                  }
-                } else {
-                  throw new Error("Planning unit found but no ID returned");
-                }
-              } else {
-                throw new Error(`No planning unit found for ${entity} in ${period}`);
-              }
-            } catch {
-              // Fallback: try via Jobs API with approval-style job type
-              const jobTypeMap: Record<string, string> = {
-                promote: "PROMOTE",
-                reject: "REJECT",
-                approve: "APPROVE",
-                sign_off: "SIGN_OFF",
-                start: "START",
-              };
-
-              const jobPayload = {
-                jobType: jobTypeMap[action] || action.toUpperCase(),
-                parameters: { scenario, year, period, entity, comment },
-              };
-
-              const submitRes = await client.post<{ jobId: number }>(
-                client.appPath("/jobs"),
-                jobPayload
-              );
-
-              const jobStatus = await client.pollJob(submitRes.jobId, timeoutMs);
-              operationSuccess = jobStatus.status === 0 || jobStatus.status === 1;
-              operationMessage = `(via Jobs API) ${jobStatusLabel(jobStatus.status)}`;
-              operationJobId = submitRes.jobId;
-
-              if (jobStatus.status === 1) {
-                warnings.push(`${entity}/${period}: completed with warnings (Jobs API fallback)`);
-              }
-            }
-
-            results.push({
-              period,
-              entity,
-              success: operationSuccess,
-              message: operationMessage,
-              jobId: operationJobId,
-            });
-          } catch (err) {
-            results.push({
-              period,
-              entity,
-              success: false,
-              message: (err as Error).message,
-            });
-            warnings.push(`${entity}/${period}: ${(err as Error).message}`);
-          }
+        try {
+          await client.postForm<unknown>(
+            client.appPath(`/planningunits/${puId}/actions`),
+            formBody
+          );
+          results.push({ period, success: true, message: "Success" });
+        } catch (err) {
+          const msg = (err as Error).message;
+          results.push({ period, success: false, message: msg });
+          warnings.push(`${period}: ${msg}`);
         }
       }
 
@@ -465,18 +394,12 @@ export function registerApprovalTools(manager: FccClientManager, registerTool: R
       const failCount = results.length - successCount;
       const duration_ms = Date.now() - startTime;
 
-      if (failCount > 0 && warnings.length === 0) {
-        warnings.push(
-          "Some operations failed. The Planning Units API endpoint is: POST /applications/{app}/planningunits/{id}/actions"
-        );
-      }
-
       return {
         success: failCount === 0,
-        message: `${action} completed: ${successCount} succeeded, ${failCount} failed across ${periods.length} period(s) and ${entities.length} entity/entities.`,
+        message: `${action} completed: ${successCount} of ${periods.length} period(s) succeeded across ${entities.length} entity/entities.`,
         data: {
           summary: { total: results.length, succeeded: successCount, failed: failCount },
-          details: results,
+          details: results.map((r) => ({ ...r, entities, scenario, year })),
         },
         warnings: warnings.length > 0 ? warnings : undefined,
         duration_ms,

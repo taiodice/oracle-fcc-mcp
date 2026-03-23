@@ -17,7 +17,12 @@ const PROVIDERS: Array<{ id: string; name: string; description: string }> = [
   { id: "kimi", name: "Kimi (Moonshot)", description: "Long-context model up to 128K tokens" },
 ];
 
-export function SettingsView() {
+interface SettingsViewProps {
+  /** Called after tenant config is saved/changed so the dashboard can remount with fresh data. */
+  onTenantChange?: () => void;
+}
+
+export function SettingsView({ onTenantChange }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState<"llm" | "tenants">("llm");
 
   return (
@@ -53,7 +58,7 @@ export function SettingsView() {
       {/* Settings Content */}
       <div className="flex-1 overflow-auto p-6">
         {activeSection === "llm" && <LLMSettings />}
-        {activeSection === "tenants" && <TenantSettings />}
+        {activeSection === "tenants" && <TenantSettings onTenantChange={onTenantChange} />}
       </div>
     </div>
   );
@@ -331,266 +336,543 @@ function LLMSettings() {
   );
 }
 
-function TenantSettings() {
-  const [url, setUrl] = useState("");
-  const [appName, setAppName] = useState("FCCS");
-  const [authMethod, setAuthMethod] = useState<"basic" | "oauth">("basic");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+// ─── Multi-Tenant Types ──────────────────────────────────────────────────────
+
+interface TenantEntry {
+  id: string;
+  url: string;
+  appName: string;
+  authMethod: "basic" | "oauth";
+  username: string;
+}
+
+interface TenantForm {
+  isNew: boolean;
+  originalId?: string;
+  url: string;
+  appName: string;
+  authMethod: "basic" | "oauth";
+  username: string;
+  password: string;
+}
+
+// ─── TenantSettings ──────────────────────────────────────────────────────────
+
+function TenantSettings({ onTenantChange }: { onTenantChange?: () => void }) {
+  const [tenants, setTenants] = useState<TenantEntry[]>([]);
+  const [defaultId, setDefaultId] = useState("");
+  const [form, setForm] = useState<TenantForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error"; title: string; detail?: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Load saved tenant config on mount
+  const inputClasses =
+    "w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white/5 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)]";
+  const labelClasses =
+    "block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5";
+
+  function makeId(name: string) {
+    return (
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || "default"
+    );
+  }
+
+  // Load on mount — supports legacy single-tenant migration
   useEffect(() => {
     async function load() {
       if (!window.fccCommander) return;
-      const saved = await window.fccCommander.getConfig("tenantConfig");
-      if (saved && typeof saved === "object") {
-        const cfg = saved as Record<string, string>;
-        if (cfg.url) setUrl(cfg.url);
-        if (cfg.appName) setAppName(cfg.appName);
-        if (cfg.authMethod) setAuthMethod(cfg.authMethod as "basic" | "oauth");
-        if (cfg.username) setUsername(cfg.username);
+      let list = (await window.fccCommander.getConfig("tenantsList")) as TenantEntry[] | null;
+      let def = (await window.fccCommander.getConfig("defaultTenant")) as string | null;
+
+      // Migrate from legacy single-tenant format if needed
+      if (!Array.isArray(list) || list.length === 0) {
+        const legacy = (await window.fccCommander.getConfig("tenantConfig")) as Record<string, string> | null;
+        if (legacy?.url) {
+          const id = makeId(legacy.appName || "FCCS");
+          list = [
+            {
+              id,
+              url: legacy.url,
+              appName: legacy.appName || "FCCS",
+              authMethod: (legacy.authMethod as "basic" | "oauth") || "basic",
+              username: legacy.username || "",
+            },
+          ];
+          def = id;
+          // Migrate the secure password to the new per-tenant key
+          const pw = await window.fccCommander.getSecureValue("tenant.password");
+          if (pw) await window.fccCommander.setSecureValue(`tenant.password.${id}`, pw);
+          await window.fccCommander.setConfig("tenantsList", list);
+          await window.fccCommander.setConfig("defaultTenant", def);
+        }
       }
-      // Load password from secure storage
-      const pw = await window.fccCommander.getSecureValue("tenant.password");
-      if (pw) setPassword("••••••••");
+
+      if (list) setTenants(list);
+      if (def) setDefaultId(def);
     }
     load();
   }, []);
 
-  function buildTenantConfig(pw?: string) {
-    const tenantId = appName.toLowerCase().replace(/\s+/g, "-") || "default";
-    return {
-      defaultTenant: tenantId,
-      tenants: {
-        [tenantId]: {
-          url: url.replace(/\/+$/, ""),
-          app: appName || "FCCS",
-          auth: authMethod,
-          username,
-          password: pw || password,
-        },
-      },
-    };
+  /** Persist list + default, then rebuild the live FccClientManager. */
+  async function rebuildAndActivate(list: TenantEntry[], def: string) {
+    if (!window.fccCommander) return;
+    const resolvedDefault = def || list[0]?.id || "";
+    await window.fccCommander.setConfig("tenantsList", list);
+    await window.fccCommander.setConfig("defaultTenant", resolvedDefault);
+
+    const tenantsMap: Record<string, unknown> = {};
+    for (const t of list) {
+      const pw = (await window.fccCommander.getSecureValue(`tenant.password.${t.id}`)) || "";
+      tenantsMap[t.id] = {
+        url: t.url.replace(/\/+$/, ""),
+        app: t.appName,
+        auth: t.authMethod,
+        username: t.username,
+        password: pw,
+      };
+    }
+    await window.fccCommander.configureTenants({
+      defaultTenant: resolvedDefault,
+      tenants: tenantsMap,
+    });
+    // Notify App so DashboardView remounts with fresh dimension data for the new tenant
+    onTenantChange?.();
   }
 
-  function extractErrorDetail(result: Record<string, unknown>): string {
-    // Extract human-readable error from various result formats
-    const content = result?.content as Array<{ text?: string }> | undefined;
-    const contentText = content?.[0]?.text;
-    if (contentText) return contentText;
-    if (typeof result?.message === "string") return result.message;
-    // Filter out noisy fields for display
-    const { success, isError, ...rest } = result;
-    void success; void isError;
-    const json = JSON.stringify(rest);
-    return json !== "{}" ? json : "Unknown error";
+  function openAddForm() {
+    setForm({ isNew: true, url: "", appName: "", authMethod: "basic", username: "", password: "" });
+    setStatus(null);
   }
 
-  async function handleSaveAndConnect() {
-    if (!window.fccCommander || !url) {
-      setStatus({ type: "error", title: "Configuration Error", detail: "Environment URL is required." });
+  async function openEditForm(t: TenantEntry) {
+    const hasPw = !!(await window.fccCommander?.getSecureValue(`tenant.password.${t.id}`));
+    setForm({
+      isNew: false,
+      originalId: t.id,
+      url: t.url,
+      appName: t.appName,
+      authMethod: t.authMethod,
+      username: t.username,
+      password: hasPw ? "••••••••" : "",
+    });
+    setStatus(null);
+  }
+
+  function closeForm() {
+    setForm(null);
+    setStatus(null);
+  }
+
+  async function handleDelete(id: string) {
+    if (!window.fccCommander) return;
+    setDeletingId(id);
+    try {
+      const updated = tenants.filter((t) => t.id !== id);
+      const newDefault = id === defaultId ? (updated[0]?.id || "") : defaultId;
+      setTenants(updated);
+      setDefaultId(newDefault);
+      // Clear the secure password for this tenant
+      await window.fccCommander.setSecureValue(`tenant.password.${id}`, "");
+      await rebuildAndActivate(updated, newDefault);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleSetDefault(id: string) {
+    setDefaultId(id);
+    await rebuildAndActivate(tenants, id);
+  }
+
+  async function handleSave() {
+    if (!form || !window.fccCommander) return;
+    if (!form.url) {
+      setStatus({ type: "error", title: "Environment URL is required." });
+      return;
+    }
+    if (!form.appName) {
+      setStatus({ type: "error", title: "Application Name is required." });
       return;
     }
     setSaving(true);
     setStatus(null);
     try {
-      // Store password securely (don't persist in plain config)
-      const actualPassword = password === "••••••••" ? (await window.fccCommander.getSecureValue("tenant.password")) || "" : password;
-      if (actualPassword && actualPassword !== "••••••••") {
-        await window.fccCommander.setSecureValue("tenant.password", actualPassword);
+      const newId = makeId(form.appName || "default");
+      const originalId = form.originalId || newId;
+
+      // Resolve the password
+      const actualPw =
+        form.password === "••••••••"
+          ? (await window.fccCommander.getSecureValue(`tenant.password.${originalId}`)) || ""
+          : form.password;
+      if (actualPw && actualPw !== "••••••••") {
+        await window.fccCommander.setSecureValue(`tenant.password.${newId}`, actualPw);
+      } else if (!form.isNew && originalId !== newId) {
+        // App name changed → copy password to new key
+        const oldPw = (await window.fccCommander.getSecureValue(`tenant.password.${originalId}`)) || "";
+        if (oldPw) await window.fccCommander.setSecureValue(`tenant.password.${newId}`, oldPw);
       }
 
-      // Save non-secret config
-      await window.fccCommander.setConfig("tenantConfig", {
-        url: url.replace(/\/+$/, ""),
-        appName: appName || "FCCS",
-        authMethod,
-        username,
-      });
+      const entry: TenantEntry = {
+        id: newId,
+        url: form.url.replace(/\/+$/, ""),
+        appName: form.appName || newId,
+        authMethod: form.authMethod,
+        username: form.username,
+      };
 
-      // Configure the FCC client in the main process
-      const result = await window.fccCommander.configureTenants(buildTenantConfig(actualPassword));
-      if (result && (result as { success?: boolean }).success !== false) {
-        setStatus({ type: "success", title: "Connection Successful", detail: "Tenant configuration saved and connected to FCC environment." });
+      let updated: TenantEntry[];
+      let newDefault: string;
+      if (form.isNew) {
+        updated = [...tenants, entry];
+        newDefault = tenants.length === 0 ? newId : defaultId; // first tenant becomes default
       } else {
-        setStatus({ type: "error", title: "Connection Failed", detail: "Tenant saved but could not connect. Please verify your credentials and environment URL." });
+        updated = tenants.map((t) => (t.id === originalId ? entry : t));
+        newDefault = defaultId === originalId ? newId : defaultId;
       }
+
+      setTenants(updated);
+      setDefaultId(newDefault);
+      await rebuildAndActivate(updated, newDefault);
+
+      // Test connection with new config before finalizing
+      try {
+        await window.fccCommander.configureTenants({
+          defaultTenant: entry.id,
+          tenants: {
+            [entry.id]: {
+              url: entry.url,
+              app: entry.appName,
+              auth: entry.authMethod,
+              username: entry.username,
+              password: actualPw,
+            },
+          },
+        });
+        const testResult = (await window.fccCommander.executeTool("fcc_test_connection", {})) as unknown as Record<string, unknown>;
+        const testFailed = testResult?.isError === true || testResult?.success === false;
+        if (testFailed) {
+          const errText = (testResult?.content as Array<{ text?: string }>)?.[0]?.text || String(testResult?.message || "Connection test failed");
+          // Show warning but still save - don't block the save
+          setStatus({ type: "error", title: "Saved with connection warning", detail: errText });
+          return;
+        }
+      } catch {
+        // Ignore test errors — save proceeds regardless
+      }
+
+      setStatus({ type: "success", title: form.isNew ? "Tenant added successfully." : "Tenant updated successfully." });
+      setTimeout(closeForm, 1200);
     } catch (err) {
-      setStatus({ type: "error", title: "Connection Failed", detail: err instanceof Error ? err.message : String(err) });
+      setStatus({ type: "error", title: "Save failed", detail: err instanceof Error ? err.message : String(err) });
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleTestConnection() {
-    if (!window.fccCommander || !url) {
-      setStatus({ type: "error", title: "Configuration Error", detail: "Environment URL is required." });
+  async function handleTest() {
+    if (!form || !window.fccCommander || !form.url) {
+      setStatus({ type: "error", title: "Environment URL is required." });
       return;
     }
     setTesting(true);
     setStatus(null);
     try {
-      // First configure tenants so the client is initialized
-      const actualPassword = password === "••••••••" ? (await window.fccCommander.getSecureValue("tenant.password")) || "" : password;
-      await window.fccCommander.configureTenants(buildTenantConfig(actualPassword));
+      const id = makeId(form.appName || "default");
+      const originalId = form.originalId || id;
+      const actualPw =
+        form.password === "••••••••"
+          ? (await window.fccCommander.getSecureValue(`tenant.password.${originalId}`)) || ""
+          : form.password;
 
-      // Then test the connection
-      const result = await window.fccCommander.executeTool("fcc_test_connection", {}) as Record<string, unknown>;
+      // Temporarily configure just this tenant so the test connection tool can run
+      await window.fccCommander.configureTenants({
+        defaultTenant: id,
+        tenants: {
+          [id]: {
+            url: form.url.replace(/\/+$/, ""),
+            app: form.appName || id,
+            auth: form.authMethod,
+            username: form.username,
+            password: actualPw,
+          },
+        },
+      });
 
-      // Check all possible error indicators
+      const result = (await window.fccCommander.executeTool(
+        "fcc_test_connection",
+        {}
+      )) as unknown as Record<string, unknown>;
       const isError = result?.isError === true || result?.success === false;
 
       if (isError) {
-        setStatus({
-          type: "error",
-          title: "Connection Failed",
-          detail: extractErrorDetail(result),
-        });
+        const text = (result?.content as Array<{ text?: string }>)?.[0]?.text;
+        setStatus({ type: "error", title: "Connection failed", detail: text || String(result?.message || "Unknown error") });
       } else {
-        setStatus({
-          type: "success",
-          title: "Connection Successful",
-          detail: "Successfully connected to the FCC environment.",
-        });
+        setStatus({ type: "success", title: "Connection successful", detail: "Connected to the FCC environment." });
       }
     } catch (err) {
-      setStatus({
-        type: "error",
-        title: "Connection Failed",
-        detail: err instanceof Error ? err.message : String(err),
-      });
+      setStatus({ type: "error", title: "Connection failed", detail: err instanceof Error ? err.message : String(err) });
     } finally {
       setTesting(false);
     }
   }
 
-  const inputClasses = "w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white/5 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)]";
+  // ─── Status Banner ────────────────────────────────────────────────────────
+  function StatusBanner() {
+    if (!status) return null;
+    return (
+      <div
+        className={`px-4 py-3 rounded-lg text-sm ${
+          status.type === "success"
+            ? "bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20"
+            : "bg-red-500/10 border border-red-500/20"
+        }`}
+      >
+        <div
+          className={`font-semibold flex items-center gap-1.5 ${
+            status.type === "success" ? "text-[var(--color-primary)]" : "text-red-400"
+          }`}
+        >
+          <span>{status.type === "success" ? "✓" : "✗"}</span>
+          {status.title}
+        </div>
+        {status.detail && (
+          <p className={`mt-1 text-xs ${status.type === "success" ? "text-[var(--color-primary)]/80" : "text-red-400/80"}`}>
+            {status.detail}
+          </p>
+        )}
+      </div>
+    );
+  }
 
-  return (
-    <div className="max-w-2xl">
-      <h2 className="text-lg font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: "var(--font-heading)" }}>
-        FCC Tenants
-      </h2>
-      <p className="text-sm text-[var(--color-text-secondary)] mb-6">
-        Configure your Oracle FCC environment connections. Supports both Basic and OAuth authentication.
-      </p>
-
-      <div className="glass-card rounded-xl p-6">
-        <div className="space-y-4">
+  // ─── Form View (Add / Edit) ───────────────────────────────────────────────
+  if (form !== null) {
+    return (
+      <div className="max-w-2xl">
+        {/* Back header */}
+        <div className="flex items-center gap-3 mb-6">
+          <button
+            onClick={closeForm}
+            className="p-1.5 rounded-lg text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-white/5 transition-colors text-base"
+          >
+            ←
+          </button>
           <div>
-            <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
-              Environment URL
-            </label>
-            <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://your-instance.oraclecloud.com"
-              className={`${inputClasses} font-data`}
-            />
+            <h2 className="text-lg font-bold text-[var(--color-text)]" style={{ fontFamily: "var(--font-heading)" }}>
+              {form.isNew ? "Add FCC Tenant" : "Edit FCC Tenant"}
+            </h2>
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              Configure your Oracle FCC environment connection.
+            </p>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+        </div>
+
+        <div className="glass-card rounded-xl p-6">
+          <div className="space-y-4">
+            {/* URL */}
             <div>
-              <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
-                Application Name
-              </label>
+              <label className={labelClasses}>Environment URL</label>
               <input
                 type="text"
-                value={appName}
-                onChange={(e) => setAppName(e.target.value)}
-                placeholder="e.g. FCCS"
+                value={form.url}
+                onChange={(e) => setForm((f) => f && { ...f, url: e.target.value })}
+                placeholder="https://your-instance.oraclecloud.com"
                 className={`${inputClasses} font-data`}
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
-                Auth Method
-              </label>
-              <select
-                value={authMethod}
-                onChange={(e) => setAuthMethod(e.target.value as "basic" | "oauth")}
-                className={inputClasses}
-              >
-                <option value="basic">Basic Auth</option>
-                <option value="oauth">OAuth 2.0</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
-                Username
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="admin@company.com"
-                className={inputClasses}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onFocus={() => { if (password === "••••••••") setPassword(""); }}
-                placeholder="••••••••"
-                className={inputClasses}
-              />
-            </div>
-          </div>
 
-          {/* Status banner */}
-          {status && (
-            <div
-              className={`px-4 py-3 rounded-lg text-sm ${
-                status.type === "success"
-                  ? "bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20"
-                  : "bg-red-500/10 border border-red-500/20"
-              }`}
-            >
-              <div className={`font-semibold flex items-center gap-1.5 ${
-                status.type === "success" ? "text-[var(--color-primary)]" : "text-red-400"
-              }`}>
-                <span className="text-base">{status.type === "success" ? "✓" : "✗"}</span>
-                {status.title}
+            {/* App Name + Auth Method */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClasses}>Application Name</label>
+                <input
+                  type="text"
+                  value={form.appName}
+                  onChange={(e) => setForm((f) => f && { ...f, appName: e.target.value })}
+                  placeholder="e.g. FCCS"
+                  className={`${inputClasses} font-data`}
+                />
               </div>
-              {status.detail && (
-                <p className={`mt-1 text-xs ${
-                  status.type === "success" ? "text-[var(--color-primary)]/80" : "text-red-400/80"
-                }`}>
-                  {status.detail}
-                </p>
-              )}
+              <div>
+                <label className={labelClasses}>Auth Method</label>
+                <select
+                  value={form.authMethod}
+                  onChange={(e) => setForm((f) => f && { ...f, authMethod: e.target.value as "basic" | "oauth" })}
+                  className={inputClasses}
+                >
+                  <option value="basic">Basic Auth</option>
+                  <option value="oauth">OAuth 2.0</option>
+                </select>
+              </div>
             </div>
-          )}
 
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={handleSaveAndConnect}
-              disabled={saving || !url}
-              className="px-4 py-2 text-sm font-semibold rounded-lg text-white transition-opacity disabled:opacity-40"
-              style={{ background: "var(--color-primary)" }}
-            >
-              {saving ? "Saving..." : "Save & Connect"}
-            </button>
-            <button
-              onClick={handleTestConnection}
-              disabled={testing || !url}
-              className="px-4 py-2 text-sm font-medium rounded-lg text-[var(--color-text-secondary)] bg-white/10 hover:bg-white/15 transition-colors duration-150 disabled:opacity-40"
-            >
-              {testing ? "Testing..." : "Test Connection"}
-            </button>
+            {/* Username + Password */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClasses}>Username</label>
+                <input
+                  type="text"
+                  value={form.username}
+                  onChange={(e) => setForm((f) => f && { ...f, username: e.target.value })}
+                  placeholder="admin@company.com"
+                  className={inputClasses}
+                />
+              </div>
+              <div>
+                <label className={labelClasses}>Password</label>
+                <input
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => setForm((f) => f && { ...f, password: e.target.value })}
+                  onFocus={() => {
+                    if (form.password === "••••••••") setForm((f) => f && { ...f, password: "" });
+                  }}
+                  placeholder="••••••••"
+                  className={inputClasses}
+                />
+              </div>
+            </div>
+
+            <StatusBanner />
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleSave}
+                disabled={saving || !form.url}
+                className="px-4 py-2 text-sm font-semibold rounded-lg text-white transition-opacity disabled:opacity-40"
+                style={{ background: "var(--color-primary)" }}
+              >
+                {saving ? "Saving..." : "Save & Connect"}
+              </button>
+              <button
+                onClick={handleTest}
+                disabled={testing || !form.url}
+                className="px-4 py-2 text-sm font-medium rounded-lg text-[var(--color-text-secondary)] bg-white/10 hover:bg-white/15 transition-colors disabled:opacity-40"
+              >
+                {testing ? "Testing..." : "Test Connection"}
+              </button>
+              <button
+                onClick={closeForm}
+                className="px-4 py-2 text-sm font-medium rounded-lg text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>
+    );
+  }
+
+  // ─── List View ────────────────────────────────────────────────────────────
+  return (
+    <div className="max-w-2xl">
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="text-lg font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: "var(--font-heading)" }}>
+            FCC Tenants
+          </h2>
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            Configure Oracle FCC environments. The AI Chat agent can operate across all configured tenants.
+          </p>
+        </div>
+        <button
+          onClick={openAddForm}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg text-white transition-opacity flex-shrink-0"
+          style={{ background: "var(--color-primary)" }}
+        >
+          <span className="text-base leading-none">+</span>
+          Add Tenant
+        </button>
+      </div>
+
+      {tenants.length === 0 ? (
+        <div className="glass-card rounded-xl p-10 text-center">
+          <div className="text-3xl mb-3">⇄</div>
+          <h3 className="text-sm font-semibold text-[var(--color-text)] mb-1">No tenants configured</h3>
+          <p className="text-xs text-[var(--color-text-secondary)] mb-4">
+            Add your first Oracle FCC environment to get started.
+          </p>
+          <button
+            onClick={openAddForm}
+            className="px-4 py-2 text-sm font-semibold rounded-lg text-white"
+            style={{ background: "var(--color-primary)" }}
+          >
+            Add FCC Environment
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {tenants.map((t) => {
+            const initials = t.appName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase() || "FC";
+            const isDefault = t.id === defaultId;
+            return (
+              <div
+                key={t.id}
+                className="glass-card rounded-xl p-4 flex items-center gap-4 hover:border-[var(--color-border-hover)] transition-all duration-200"
+              >
+                {/* Avatar */}
+                <div
+                  className="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{
+                    background: "color-mix(in srgb, var(--color-primary) 15%, transparent)",
+                    color: "var(--color-primary)",
+                  }}
+                >
+                  {initials}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-[var(--color-text)]">{t.appName}</span>
+                    {isDefault && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
+                        Default
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[var(--color-text-secondary)] truncate mt-0.5 font-data">{t.url}</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]/60 mt-0.5">
+                    {t.authMethod === "basic" ? "Basic Auth" : "OAuth 2.0"}
+                    {t.username ? ` · ${t.username}` : ""}
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {!isDefault && (
+                    <button
+                      onClick={() => handleSetDefault(t.id)}
+                      className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-[var(--color-text-secondary)] bg-white/5 hover:bg-white/10 transition-colors"
+                    >
+                      Set Default
+                    </button>
+                  )}
+                  <button
+                    onClick={() => openEditForm(t)}
+                    className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-[var(--color-text-secondary)] bg-white/5 hover:bg-white/10 transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(t.id)}
+                    disabled={deletingId === t.id}
+                    className="px-2.5 py-1.5 text-xs font-medium rounded-lg text-red-400 bg-red-500/5 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                  >
+                    {deletingId === t.id ? "..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

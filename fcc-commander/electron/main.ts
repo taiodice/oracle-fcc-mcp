@@ -94,9 +94,38 @@ function initializeToolEngine() {
   tools = registerAllTools(manager!);
 }
 
-/** Auto-restore tenant config from saved settings on startup. */
+/** Auto-restore tenant config from saved settings on startup.
+ *  Supports both the new multi-tenant format (tenantsList) and the
+ *  legacy single-tenant format (tenantConfig) for backwards compatibility.
+ */
 function autoRestoreTenants() {
   try {
+    // ── New multi-tenant format ──────────────────────────────────────────────
+    const tenantsList = getConfigValue("tenantsList") as Array<{
+      id: string; url: string; appName: string; authMethod: string; username: string;
+    }> | undefined;
+    const savedDefault = getConfigValue("defaultTenant") as string | undefined;
+
+    if (Array.isArray(tenantsList) && tenantsList.length > 0) {
+      const tenants: Record<string, TenantConfig> = {};
+      for (const t of tenantsList) {
+        const password = getSecureValueDirect(`tenant.password.${t.id}`) || "";
+        tenants[t.id] = {
+          url: t.url.replace(/\/+$/, ""),
+          app: t.appName,
+          auth: (t.authMethod as "basic" | "oauth") || "basic",
+          username: t.username,
+          password,
+        };
+      }
+      const defaultTenant = savedDefault || tenantsList[0].id;
+      manager = new FccClientManager({ defaultTenant, tenants });
+      initializeToolEngine();
+      console.log(`[startup] Restored ${tenantsList.length} tenant(s), default: "${defaultTenant}", tools: ${tools.length}`);
+      return;
+    }
+
+    // ── Legacy single-tenant fallback ────────────────────────────────────────
     const saved = getConfigValue("tenantConfig") as Record<string, string> | undefined;
     if (!saved?.url) return;
 
@@ -116,7 +145,7 @@ function autoRestoreTenants() {
     };
     manager = new FccClientManager(config);
     initializeToolEngine();
-    console.log(`[startup] Auto-restored tenant "${tenantId}" with ${tools.length} tools`);
+    console.log(`[startup] Restored legacy tenant "${tenantId}" with ${tools.length} tools`);
   } catch (err) {
     console.error("[startup] Failed to auto-restore tenants:", err);
   }

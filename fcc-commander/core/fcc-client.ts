@@ -83,6 +83,28 @@ export class FccClient {
     return this.request<T>("POST", path);
   }
 
+  /** POST with form-encoded body (application/x-www-form-urlencoded). */
+  async postForm<T>(path: string, formBody: string): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
+    const authHeader = await this.getAuthHeader();
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formBody,
+    });
+    if (!res.ok) {
+      await this.throwOracleError(res);
+    }
+    if (res.status === 204 || res.headers.get("content-length") === "0") {
+      return undefined as unknown as T;
+    }
+    return res.json() as Promise<T>;
+  }
+
   async put<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>("PUT", path, body);
   }
@@ -203,6 +225,22 @@ export class FccClient {
 
   fccsPath(suffix: string = ""): string {
     return `/fccs/rest/v1${suffix}`;
+  }
+
+  /**
+   * Encode a planning unit identifier for use in URL paths.
+   * Oracle encoding: spaces → %20, quotes → %22, colons left as-is.
+   * Example: "Actual"::"FY25" → %22Actual%22::%22FY25%22
+   */
+  encodePuId(scenario: string, year: string, entity?: string, secondaryMember: string = ""): string {
+    function enc(s: string): string {
+      return `%22${s.replace(/ /g, "%20")}%22`;
+    }
+    let id = `${enc(scenario)}::${enc(year)}`;
+    if (entity !== undefined) {
+      id += `::${enc(entity)}::${enc(secondaryMember)}`;
+    }
+    return id;
   }
 
   // ─── Root Entity Discovery ──────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Sidebar } from "./components/layout/Sidebar";
 import { BrandedHeader } from "./components/layout/BrandedHeader";
 import { DashboardView } from "./components/dashboard/DashboardView";
@@ -16,6 +16,51 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const { branding, loading } = useBranding();
+  // Incremented every time tenant config changes — forces DashboardView to remount
+  // and re-fetch dimensions for the new tenant instead of using stale cached data.
+  const [tenantVersion, setTenantVersion] = useState(0);
+
+  // Re-initialize tenant manager from persisted config on startup.
+  // This corrects any stale config loaded by autoRestoreTenants() before React mounted.
+  useEffect(() => {
+    async function syncTenants() {
+      if (!window.fccCommander) return;
+      try {
+        let list = (await window.fccCommander.getConfig("tenantsList")) as Array<{
+          id: string; url: string; appName: string; authMethod: string; username: string;
+        }> | null;
+        let def = (await window.fccCommander.getConfig("defaultTenant")) as string | null;
+
+        // Migrate from legacy single-tenant format if needed
+        if (!Array.isArray(list) || list.length === 0) {
+          const legacy = (await window.fccCommander.getConfig("tenantConfig")) as Record<string, string> | null;
+          if (legacy?.url) {
+            const id = (legacy.appName || "default").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "default";
+            list = [{ id, url: legacy.url, appName: legacy.appName || "FCCS", authMethod: legacy.authMethod || "basic", username: legacy.username || "" }];
+            def = id;
+            const pw = await window.fccCommander.getSecureValue("tenant.password");
+            if (pw) await window.fccCommander.setSecureValue(`tenant.password.${id}`, pw);
+            await window.fccCommander.setConfig("tenantsList", list);
+            await window.fccCommander.setConfig("defaultTenant", def);
+          }
+        }
+
+        if (Array.isArray(list) && list.length > 0) {
+          const resolvedDefault = def || list[0].id;
+          const tenantsMap: Record<string, unknown> = {};
+          for (const t of list) {
+            const pw = (await window.fccCommander.getSecureValue(`tenant.password.${t.id}`)) || "";
+            tenantsMap[t.id] = { url: t.url.replace(/\/+$/, ""), app: t.appName, auth: t.authMethod, username: t.username, password: pw };
+          }
+          await window.fccCommander.configureTenants({ defaultTenant: resolvedDefault, tenants: tenantsMap });
+          setTenantVersion((v) => v + 1);
+        }
+      } catch {
+        // Ignore errors — fallback to whatever autoRestoreTenants set up
+      }
+    }
+    syncTenants();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -53,9 +98,13 @@ export default function App() {
           {currentView === "welcome" && (
             <WelcomeView branding={branding} onNavigate={setCurrentView} />
           )}
-          {currentView === "dashboard" && <DashboardView />}
+          {/* key={tenantVersion} forces a full remount when tenant config changes,
+              clearing stale dimension/filter state from the previous tenant. */}
+          {currentView === "dashboard" && <DashboardView key={tenantVersion} />}
           {currentView === "activity-log" && <ActivityLogView />}
-          {currentView === "settings" && <SettingsView />}
+          {currentView === "settings" && (
+            <SettingsView onTenantChange={() => setTenantVersion((v) => v + 1)} />
+          )}
         </main>
       </div>
 
