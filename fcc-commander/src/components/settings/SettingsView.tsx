@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { LLM_PROVIDERS } from "../../constants/providers";
 
 interface ProviderConfig {
   id: string;
@@ -17,20 +18,19 @@ const PROVIDERS: Array<{ id: string; name: string; description: string }> = [
 ];
 
 export function SettingsView() {
-  const [activeSection, setActiveSection] = useState<"llm" | "tenants" | "branding">("llm");
+  const [activeSection, setActiveSection] = useState<"llm" | "tenants">("llm");
 
   return (
     <div className="h-full flex">
       {/* Settings Nav */}
-      <div className="w-52 border-r border-slate-200/80 bg-white p-4">
-        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-2">
+      <div className="w-52 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3 px-2">
           Configuration
         </h3>
         <nav className="space-y-0.5">
           {[
             { id: "llm" as const, label: "LLM Providers", icon: "✦" },
             { id: "tenants" as const, label: "FCC Tenants", icon: "⇄" },
-            { id: "branding" as const, label: "Branding", icon: "◎" },
           ].map((item) => (
             <button
               key={item.id}
@@ -38,8 +38,8 @@ export function SettingsView() {
               className={`
                 w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-150
                 ${activeSection === item.id
-                  ? "bg-slate-100 text-slate-800 font-medium"
-                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                  ? "bg-white/10 text-[var(--color-text)] font-medium"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:bg-white/5"
                 }
               `}
             >
@@ -54,7 +54,6 @@ export function SettingsView() {
       <div className="flex-1 overflow-auto p-6">
         {activeSection === "llm" && <LLMSettings />}
         {activeSection === "tenants" && <TenantSettings />}
-        {activeSection === "branding" && <BrandingSettings />}
       </div>
     </div>
   );
@@ -68,7 +67,11 @@ function LLMSettings() {
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { success: boolean; message: string }>>({});
 
-  // Load existing keys on mount
+  // Active LLM selection state
+  const [activeProviderId, setActiveProviderId] = useState("claude");
+  const [activeModelId, setActiveModelId] = useState("claude-sonnet-4-20250514");
+
+  // Load existing keys + active LLM on mount
   useEffect(() => {
     async function loadKeys() {
       if (!window.fccCommander) return;
@@ -79,6 +82,14 @@ function LLMSettings() {
         })
       );
       setProviders(updated);
+
+      // Load saved active LLM
+      const [savedProvider, savedModel] = await Promise.all([
+        window.fccCommander.getConfig("llm.provider"),
+        window.fccCommander.getConfig("llm.model"),
+      ]);
+      if (savedProvider) setActiveProviderId(savedProvider as string);
+      if (savedModel) setActiveModelId(savedModel as string);
     }
     loadKeys();
   }, []);
@@ -142,32 +153,124 @@ function LLMSettings() {
 
   const isKeyEditable = (apiKey: string) => apiKey && apiKey !== "••••••••••••";
 
+  const configuredProviderIds = providers.filter((p) => p.configured).map((p) => p.id);
+
+  async function handleSelectModel(providerId: string, modelId: string) {
+    setActiveProviderId(providerId);
+    setActiveModelId(modelId);
+    if (window.fccCommander) {
+      await window.fccCommander.setConfig("llm.provider", providerId);
+      await window.fccCommander.setConfig("llm.model", modelId);
+    }
+  }
+
   return (
     <div className="max-w-2xl">
-      <h2 className="text-lg font-bold text-slate-800 mb-1" style={{ fontFamily: "var(--font-heading)" }}>
+      <h2 className="text-lg font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: "var(--font-heading)" }}>
         LLM Providers
       </h2>
-      <p className="text-sm text-slate-400 mb-6">
+      <p className="text-sm text-[var(--color-text-secondary)] mb-6">
         Configure API keys for the AI models you want to use. Your keys are encrypted and stored locally.
       </p>
 
+      {/* Active Model Selector */}
+      <div className="glass-card rounded-xl p-4 mb-6">
+        <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
+          Active Model
+        </h3>
+        {configuredProviderIds.length === 0 ? (
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            Add an API key below to enable a provider.
+          </p>
+        ) : (
+          <div>
+            {/* Provider tabs */}
+            <div className="flex gap-2 mb-3">
+              {LLM_PROVIDERS.filter((lp) => configuredProviderIds.includes(lp.id)).map((lp) => (
+                <button
+                  key={lp.id}
+                  onClick={() => {
+                    handleSelectModel(lp.id, lp.defaultModel);
+                  }}
+                  className={`
+                    flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150
+                    ${activeProviderId === lp.id
+                      ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)] border border-[var(--color-primary)]/30"
+                      : "bg-white/5 text-[var(--color-text-secondary)] hover:bg-white/10 border border-transparent"
+                    }
+                  `}
+                >
+                  <span
+                    className="w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center text-white flex-shrink-0"
+                    style={{ background: lp.color }}
+                  >
+                    {lp.badge}
+                  </span>
+                  {lp.shortName}
+                </button>
+              ))}
+            </div>
+            {/* Models for active provider */}
+            {(() => {
+              const activeLp = LLM_PROVIDERS.find((lp) => lp.id === activeProviderId);
+              if (!activeLp || !configuredProviderIds.includes(activeLp.id)) return null;
+              return (
+                <div className="space-y-1">
+                  {activeLp.models.map((m) => {
+                    const isActive = activeModelId === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => handleSelectModel(activeLp.id, m.id)}
+                        className={`
+                          w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150
+                          ${isActive
+                            ? "bg-[var(--color-primary)]/10 text-[var(--color-text)]"
+                            : "text-[var(--color-text-secondary)] hover:bg-white/5 hover:text-[var(--color-text)]"
+                          }
+                        `}
+                      >
+                        {isActive && (
+                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--color-primary)", boxShadow: "0 0 6px var(--color-primary)" }} />
+                        )}
+                        {!isActive && <span className="w-1.5 h-1.5 flex-shrink-0" />}
+                        <span className="flex-1 font-medium">{m.name}</span>
+                        {m.contextWindow && (
+                          <span className="text-[10px] text-[var(--color-text-secondary)] font-data">
+                            {m.contextWindow}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+
+      {/* API Key Cards */}
+      <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
+        API Keys
+      </h3>
       <div className="space-y-3">
         {providers.map((p) => (
           <div
             key={p.id}
-            className="bg-white rounded-xl border border-slate-200/80 p-4 hover:shadow-sm transition-shadow duration-200"
+            className="glass-card rounded-xl p-4 hover:border-[var(--color-border-hover)] transition-all duration-200"
           >
             <div className="flex items-start justify-between mb-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-slate-800">{p.name}</h3>
+                  <h3 className="text-sm font-semibold text-[var(--color-text)]">{p.name}</h3>
                   {p.configured && (
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
                       Configured
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">{p.description}</p>
+                <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{p.description}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -186,12 +289,12 @@ function LLMSettings() {
                   });
                 }}
                 placeholder={`Enter ${p.name} API key...`}
-                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 font-data"
+                className="flex-1 px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white/5 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] font-data"
               />
               <button
                 onClick={() => testKey(p.id, p.apiKey)}
                 disabled={testing === p.id || !isKeyEditable(p.apiKey)}
-                className="px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-40 text-slate-600 bg-slate-100 hover:bg-slate-200"
+                className="px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 disabled:opacity-40 text-[var(--color-text-secondary)] bg-white/10 hover:bg-white/15"
               >
                 {testing === p.id ? "Testing..." : "Test"}
               </button>
@@ -213,8 +316,8 @@ function LLMSettings() {
               <div
                 className={`mt-2 px-3 py-2 rounded-lg text-xs ${
                   testResult[p.id].success
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    : "bg-red-50 text-red-700 border border-red-200"
+                    ? "bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20"
+                    : "bg-red-500/10 text-red-400 border border-red-500/20"
                 }`}
               >
                 {testResult[p.id].success ? "✓ " : "✗ "}
@@ -364,19 +467,21 @@ function TenantSettings() {
     }
   }
 
+  const inputClasses = "w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white/5 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)]";
+
   return (
     <div className="max-w-2xl">
-      <h2 className="text-lg font-bold text-slate-800 mb-1" style={{ fontFamily: "var(--font-heading)" }}>
+      <h2 className="text-lg font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: "var(--font-heading)" }}>
         FCC Tenants
       </h2>
-      <p className="text-sm text-slate-400 mb-6">
+      <p className="text-sm text-[var(--color-text-secondary)] mb-6">
         Configure your Oracle FCC environment connections. Supports both Basic and OAuth authentication.
       </p>
 
-      <div className="bg-white rounded-xl border border-slate-200/80 p-6">
+      <div className="glass-card rounded-xl p-6">
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
               Environment URL
             </label>
             <input
@@ -384,12 +489,12 @@ function TenantSettings() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://your-instance.oraclecloud.com"
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 font-data"
+              className={`${inputClasses} font-data`}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
                 Application Name
               </label>
               <input
@@ -397,17 +502,17 @@ function TenantSettings() {
                 value={appName}
                 onChange={(e) => setAppName(e.target.value)}
                 placeholder="e.g. FCCS"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 font-data"
+                className={`${inputClasses} font-data`}
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
                 Auth Method
               </label>
               <select
                 value={authMethod}
                 onChange={(e) => setAuthMethod(e.target.value as "basic" | "oauth")}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                className={inputClasses}
               >
                 <option value="basic">Basic Auth</option>
                 <option value="oauth">OAuth 2.0</option>
@@ -416,7 +521,7 @@ function TenantSettings() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
                 Username
               </label>
               <input
@@ -424,11 +529,11 @@ function TenantSettings() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="admin@company.com"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                className={inputClasses}
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
                 Password
               </label>
               <input
@@ -437,7 +542,7 @@ function TenantSettings() {
                 onChange={(e) => setPassword(e.target.value)}
                 onFocus={() => { if (password === "••••••••") setPassword(""); }}
                 placeholder="••••••••"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                className={inputClasses}
               />
             </div>
           </div>
@@ -447,19 +552,19 @@ function TenantSettings() {
             <div
               className={`px-4 py-3 rounded-lg text-sm ${
                 status.type === "success"
-                  ? "bg-emerald-50 border border-emerald-200"
-                  : "bg-red-50 border border-red-200"
+                  ? "bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20"
+                  : "bg-red-500/10 border border-red-500/20"
               }`}
             >
               <div className={`font-semibold flex items-center gap-1.5 ${
-                status.type === "success" ? "text-emerald-700" : "text-red-700"
+                status.type === "success" ? "text-[var(--color-primary)]" : "text-red-400"
               }`}>
                 <span className="text-base">{status.type === "success" ? "✓" : "✗"}</span>
                 {status.title}
               </div>
               {status.detail && (
                 <p className={`mt-1 text-xs ${
-                  status.type === "success" ? "text-emerald-600" : "text-red-600"
+                  status.type === "success" ? "text-[var(--color-primary)]/80" : "text-red-400/80"
                 }`}>
                   {status.detail}
                 </p>
@@ -479,7 +584,7 @@ function TenantSettings() {
             <button
               onClick={handleTestConnection}
               disabled={testing || !url}
-              className="px-4 py-2 text-sm font-medium rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors duration-150 disabled:opacity-40"
+              className="px-4 py-2 text-sm font-medium rounded-lg text-[var(--color-text-secondary)] bg-white/10 hover:bg-white/15 transition-colors duration-150 disabled:opacity-40"
             >
               {testing ? "Testing..." : "Test Connection"}
             </button>
@@ -490,30 +595,3 @@ function TenantSettings() {
   );
 }
 
-function BrandingSettings() {
-  return (
-    <div className="max-w-2xl">
-      <h2 className="text-lg font-bold text-slate-800 mb-1" style={{ fontFamily: "var(--font-heading)" }}>
-        Branding
-      </h2>
-      <p className="text-sm text-slate-400 mb-6">
-        Customize the look and feel of FCC Commander for your organization.
-      </p>
-
-      <div className="bg-white rounded-xl border border-slate-200/80 p-6">
-        <p className="text-sm text-slate-500">
-          Branding is configured via the <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-data">brand.json</code> file
-          at build time. To create a white-label version for a client, add a new folder in{" "}
-          <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-data">branding/[client-name]/</code> with
-          a custom <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded font-data">brand.json</code> and logo files.
-        </p>
-        <div className="mt-4 p-4 bg-slate-50 rounded-lg">
-          <pre className="text-xs font-data text-slate-600 whitespace-pre-wrap">
-{`npm run build:brand -- --brand=acme-corp
-# Produces: "Acme Corp FCC Commander Setup.exe"`}
-          </pre>
-        </div>
-      </div>
-    </div>
-  );
-}

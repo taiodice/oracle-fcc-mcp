@@ -392,7 +392,7 @@ export function registerConsolidationTools(manager: FccClientManager, registerTo
   // ─── fcc_manage_period ───────────────────────────────────────────────────
   registerTool(
     "fcc_manage_period",
-    "Open, close, or lock a period in FCC for a specific scenario and year.",
+    "Open, close, or lock a CONSOLIDATION period (data entry period) in FCC. NOTE: For opening/closing journal periods (controlling whether journals can be created), use fcc_manage_journal_period instead. This tool manages the consolidation/data-entry period status.",
     {
       type: "object",
       properties: {

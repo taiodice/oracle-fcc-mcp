@@ -1,8 +1,11 @@
 import React from "react";
+import { MessageSquare } from "lucide-react";
 import type { View } from "../../App";
 
 interface BrandedHeaderProps {
   currentView: View;
+  chatOpen: boolean;
+  onToggleChat: () => void;
 }
 
 const VIEW_TITLES: Record<View, string> = {
@@ -19,7 +22,7 @@ const VIEW_SUBTITLES: Record<View, string> = {
   settings:      "Configuration & API Keys",
 };
 
-export function BrandedHeader({ currentView }: BrandedHeaderProps) {
+export function BrandedHeader({ currentView, chatOpen, onToggleChat }: BrandedHeaderProps) {
   return (
     <header
       className="flex items-center justify-between px-6 flex-shrink-0"
@@ -53,8 +56,22 @@ export function BrandedHeader({ currentView }: BrandedHeaderProps) {
         </div>
       </div>
 
-      {/* Right: Status + Badge */}
+      {/* Right: Chat toggle + Status */}
       <div className="flex items-center gap-2.5">
+        {/* AI Chat toggle */}
+        <button
+          onClick={onToggleChat}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200"
+          style={{
+            background: chatOpen ? "rgba(25,197,163,0.15)" : "rgba(25,197,163,0.06)",
+            border: chatOpen ? "1px solid rgba(25,197,163,0.4)" : "1px solid rgba(25,197,163,0.15)",
+            color: chatOpen ? "#19C5A3" : "#7096B8",
+          }}
+        >
+          <MessageSquare size={12} strokeWidth={2} />
+          AI Chat
+        </button>
+
         {/* Connection status */}
         <div
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
@@ -67,7 +84,6 @@ export function BrandedHeader({ currentView }: BrandedHeaderProps) {
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           Connected
         </div>
-
       </div>
     </header>
   );

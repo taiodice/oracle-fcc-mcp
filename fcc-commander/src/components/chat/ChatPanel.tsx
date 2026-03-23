@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { X, Trash2, Send, Loader2, Sparkles } from "lucide-react";
 import { useChat } from "../../hooks/useChat";
 import { ModelSelector } from "./ModelSelector";
 import { ToolCallCard } from "./ToolCallCard";
@@ -17,7 +18,6 @@ const EXAMPLE_PROMPTS = [
 ];
 
 export function ChatPanel({ onClose, onNavigateToSettings }: ChatPanelProps) {
-  // LLM selection — persisted to config
   const [providerId, setProviderId] = useState("claude");
   const [modelId, setModelId] = useState("claude-sonnet-4-20250514");
   const [configuredProviders, setConfiguredProviders] = useState<string[]>([]);
@@ -29,17 +29,14 @@ export function ChatPanel({ onClose, onNavigateToSettings }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load configured providers and saved LLM preference
   useEffect(() => {
     async function init() {
       if (!window.fccCommander) return;
-
       const [configured, savedProvider, savedModel] = await Promise.all([
         window.fccCommander.getConfiguredProviders(),
         window.fccCommander.getConfig("llm.provider"),
         window.fccCommander.getConfig("llm.model"),
       ]);
-
       setConfiguredProviders(configured as string[]);
       if (savedProvider) setProviderId(savedProvider as string);
       if (savedModel) setModelId(savedModel as string);
@@ -47,12 +44,10 @@ export function ChatPanel({ onClose, onNavigateToSettings }: ChatPanelProps) {
     init();
   }, []);
 
-  // Auto-scroll on new messages / streaming
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamBuffer]);
 
-  // Auto-resize textarea
   useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -90,20 +85,29 @@ export function ChatPanel({ onClose, onNavigateToSettings }: ChatPanelProps) {
 
   return (
     <div
-      className="h-full flex flex-col border-l border-slate-200/80 bg-white animate-slide-right"
-      style={{ width: "var(--chat-panel-width)", minWidth: "360px" }}
+      className="h-full flex flex-col flex-shrink-0 animate-slide-right"
+      style={{
+        width: "360px",
+        background: "rgba(7,17,31,0.95)",
+        borderLeft: "1px solid rgba(25,197,163,0.12)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+      }}
     >
-      {/* ─── Header ──────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 flex-shrink-0">
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+      >
         <div className="flex items-center gap-2 min-w-0">
           <span
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0"
-            style={{ background: "var(--color-accent)", color: "var(--color-sidebar)" }}
+            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ background: "rgba(25,197,163,0.15)", color: "#19C5A3" }}
           >
-            ✦
+            <Sparkles size={14} strokeWidth={2} />
           </span>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-800 leading-tight">
+            <div className="text-sm font-semibold leading-tight" style={{ color: "#E2EBF5" }}>
               AI Assistant
             </div>
             <ModelSelector
@@ -114,34 +118,47 @@ export function ChatPanel({ onClose, onNavigateToSettings }: ChatPanelProps) {
             />
           </div>
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1 flex-shrink-0">
           {messages.length > 0 && (
             <button
               onClick={clearMessages}
-              className="text-[10px] text-slate-300 hover:text-slate-500 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors duration-150"
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-150"
+              style={{ color: "#7096B8" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#E2EBF5")}
+              onMouseLeave={e => (e.currentTarget.style.color = "#7096B8")}
+              title="Clear chat"
             >
-              Clear
+              <Trash2 size={13} strokeWidth={2} />
             </button>
           )}
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors duration-150"
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-150"
+            style={{ color: "#7096B8" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#E2EBF5")}
+            onMouseLeave={e => (e.currentTarget.style.color = "#7096B8")}
           >
-            ✕
+            <X size={14} strokeWidth={2} />
           </button>
         </div>
       </div>
 
-      {/* ─── No API Key Banner ────────────────────────────────────────── */}
+      {/* No API Key Banner */}
       {noKeysConfigured && (
-        <div className="mx-3 mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex-shrink-0">
-          <p className="text-xs font-semibold text-amber-800 mb-1">No API key configured</p>
-          <p className="text-xs text-amber-700 mb-2 leading-relaxed">
-            Add an API key for Claude, OpenAI, Gemini, DeepSeek, or Kimi to start chatting.
+        <div
+          className="mx-3 mt-3 p-3 rounded-xl flex-shrink-0"
+          style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)" }}
+        >
+          <p className="text-xs font-semibold mb-1" style={{ color: "#F59E0B" }}>
+            No API key configured
+          </p>
+          <p className="text-xs mb-2 leading-relaxed" style={{ color: "#94A3B8" }}>
+            Add an API key for Claude, OpenAI, Gemini, or DeepSeek to start.
           </p>
           <button
             onClick={onNavigateToSettings}
-            className="text-xs font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900"
+            className="text-xs font-semibold underline underline-offset-2"
+            style={{ color: "#F59E0B" }}
           >
             Go to Settings →
           </button>
@@ -149,37 +166,41 @@ export function ChatPanel({ onClose, onNavigateToSettings }: ChatPanelProps) {
       )}
 
       {!noKeysConfigured && !currentHasKey && (
-        <div className="mx-3 mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200 flex-shrink-0">
-          <p className="text-xs text-slate-500">
-            No key for <strong>{LLM_PROVIDERS.find((p) => p.id === providerId)?.name}</strong>.
-            {" "}Switch provider or{" "}
-            <button
-              onClick={onNavigateToSettings}
-              className="text-amber-600 underline underline-offset-2 hover:text-amber-700"
-            >
-              add a key
-            </button>.
-          </p>
+        <div
+          className="mx-3 mt-3 p-3 rounded-xl flex-shrink-0 text-xs"
+          style={{
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            color: "#7096B8",
+          }}
+        >
+          No key for <strong style={{ color: "#B4CCE5" }}>{LLM_PROVIDERS.find((p) => p.id === providerId)?.name}</strong>.{" "}
+          Switch provider or{" "}
+          <button
+            onClick={onNavigateToSettings}
+            className="underline underline-offset-2"
+            style={{ color: "#19C5A3" }}
+          >
+            add a key
+          </button>.
         </div>
       )}
 
-      {/* ─── Messages ────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto p-4 dark-scroll space-y-5">
-        {/* Empty state */}
+      {/* Messages */}
+      <div className="flex-1 overflow-auto p-4 dark-scroll space-y-4">
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center px-4 text-center">
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center text-lg mb-4"
-              style={{ background: "var(--color-accent)15", color: "var(--color-accent)" }}
+              className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
+              style={{ background: "rgba(25,197,163,0.1)", color: "#19C5A3" }}
             >
-              ✦
+              <Sparkles size={22} strokeWidth={1.5} />
             </div>
-            <p className="text-sm font-semibold text-slate-700 mb-1">
+            <p className="text-sm font-semibold mb-1" style={{ color: "#E2EBF5" }}>
               Ask anything about FCC
             </p>
-            <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-              I can check entity status, run consolidations,
-              manage journals, promote entities, and more.
+            <p className="text-xs mb-6 leading-relaxed" style={{ color: "#7096B8" }}>
+              Check entity status, run consolidations, manage journals, promote entities, and more.
             </p>
             <div className="space-y-2 w-full">
               {EXAMPLE_PROMPTS.map((prompt) => (
@@ -187,7 +208,22 @@ export function ChatPanel({ onClose, onNavigateToSettings }: ChatPanelProps) {
                   key={prompt}
                   onClick={() => sendMessage(prompt)}
                   disabled={!currentHasKey || streaming}
-                  className="w-full text-left text-xs px-3 py-2.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full text-left text-xs px-3 py-2.5 rounded-lg transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    color: "#94A3B8",
+                  }}
+                  onMouseEnter={e => {
+                    if (!e.currentTarget.disabled) {
+                      (e.currentTarget as HTMLElement).style.borderColor = "rgba(25,197,163,0.3)";
+                      (e.currentTarget as HTMLElement).style.color = "#E2EBF5";
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.06)";
+                    (e.currentTarget as HTMLElement).style.color = "#94A3B8";
+                  }}
                 >
                   {prompt}
                 </button>
@@ -196,51 +232,41 @@ export function ChatPanel({ onClose, onNavigateToSettings }: ChatPanelProps) {
           </div>
         )}
 
-        {/* Message list */}
         {messages.map((msg, i) => {
           const isLast = i === messages.length - 1;
           return (
             <div key={msg.id} className="animate-slide-up">
               {msg.role === "user" ? (
-                /* ── User bubble ── */
                 <div className="flex justify-end">
                   <div
-                    className="max-w-[88%] px-4 py-2.5 rounded-2xl rounded-br-sm text-sm text-white leading-relaxed"
-                    style={{ background: "var(--color-primary)" }}
+                    className="max-w-[88%] px-4 py-2.5 rounded-2xl rounded-br-sm text-sm leading-relaxed"
+                    style={{ background: "rgba(25,197,163,0.15)", color: "#E2EBF5", border: "1px solid rgba(25,197,163,0.2)" }}
                   >
                     {msg.content}
                   </div>
                 </div>
               ) : (
-                /* ── Assistant bubble ── */
                 <div className="flex gap-2.5">
                   <div
-                    className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
-                    style={{ background: "var(--color-accent)", color: "var(--color-sidebar)" }}
+                    className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5"
+                    style={{ background: "rgba(25,197,163,0.15)", color: "#19C5A3" }}
                   >
-                    ✦
+                    <Sparkles size={11} strokeWidth={2} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    {/* Tool call cards */}
                     {msg.toolCalls?.map((tc, ti) => (
                       <ToolCallCard key={ti} toolCall={tc} />
                     ))}
-
-                    {/* Message text */}
                     <div
-                      className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${
-                        msg.isError ? "text-red-600" : "text-slate-700"
-                      }`}
+                      className="text-sm leading-relaxed whitespace-pre-wrap break-words"
+                      style={{ color: msg.isError ? "#EF4444" : "#B4CCE5" }}
                     >
                       {isLast && streaming && !msg.content ? (
-                        /* Streaming in progress — show buffer */
                         streamBuffer || (
-                          <span className="inline-flex items-center gap-1">
-                            <span
-                              className="inline-block w-1.5 h-3.5 rounded-sm animate-pulse"
-                              style={{ background: "var(--color-accent)" }}
-                            />
-                          </span>
+                          <span
+                            className="inline-block w-1.5 h-3.5 rounded-sm animate-pulse"
+                            style={{ background: "#19C5A3" }}
+                          />
                         )
                       ) : (
                         msg.content
@@ -256,9 +282,16 @@ export function ChatPanel({ onClose, onNavigateToSettings }: ChatPanelProps) {
         <div ref={bottomRef} />
       </div>
 
-      {/* ─── Input ───────────────────────────────────────────────────── */}
-      <div className="p-3 border-t border-slate-100 flex-shrink-0">
-        <div className="flex items-end gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200/80 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/10 transition-all duration-200">
+      {/* Input */}
+      <div className="p-3 flex-shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div
+          className="flex items-end gap-2 rounded-xl px-3 py-2 transition-all duration-200"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+          onFocus={() => {}}
+        >
           <textarea
             ref={textareaRef}
             value={input}
@@ -267,26 +300,30 @@ export function ChatPanel({ onClose, onNavigateToSettings }: ChatPanelProps) {
             placeholder={currentHasKey ? "Ask about FCC..." : "Configure an API key first..."}
             disabled={!currentHasKey}
             rows={1}
-            className="flex-1 bg-transparent text-sm outline-none resize-none text-slate-700 placeholder-slate-400 disabled:cursor-not-allowed"
-            style={{ fontFamily: "var(--font-body)", minHeight: "20px" }}
+            className="flex-1 bg-transparent text-sm outline-none resize-none disabled:cursor-not-allowed"
+            style={{
+              fontFamily: "var(--font-body)",
+              minHeight: "20px",
+              color: "#E2EBF5",
+            }}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || streaming || !currentHasKey}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white transition-all duration-200 flex-shrink-0 disabled:opacity-30 hover:opacity-90"
-            style={{ background: "var(--color-primary)" }}
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 flex-shrink-0 disabled:opacity-30"
+            style={{ background: "rgba(25,197,163,0.2)", color: "#19C5A3" }}
           >
             {streaming ? (
-              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <Loader2 size={14} strokeWidth={2} className="animate-spin" />
             ) : (
-              <span className="text-sm">↑</span>
+              <Send size={13} strokeWidth={2} />
             )}
           </button>
         </div>
         <div className="flex items-center justify-between mt-1.5 px-0.5">
-          <span className="text-[10px] text-slate-300">⏎ Send · Shift+⏎ New line</span>
+          <span className="text-[10px]" style={{ color: "#4A6280" }}>⏎ Send · Shift+⏎ New line</span>
           {error && (
-            <span className="text-[10px] text-red-400 truncate max-w-[60%]" title={error}>
+            <span className="text-[10px] truncate max-w-[60%]" style={{ color: "#EF4444" }} title={error}>
               ⚠ {error}
             </span>
           )}

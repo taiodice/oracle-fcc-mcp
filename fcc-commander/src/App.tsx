@@ -6,6 +6,7 @@ import { SettingsView } from "./components/settings/SettingsView";
 import { WelcomeView } from "./components/WelcomeView";
 import { ActivityLogView } from "./components/ActivityLogView";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { ChatPanel } from "./components/chat/ChatPanel";
 import { useBranding } from "./hooks/useBranding";
 
 export type View = "welcome" | "dashboard" | "settings" | "activity-log";
@@ -13,6 +14,7 @@ export type View = "welcome" | "dashboard" | "settings" | "activity-log";
 export default function App() {
   const [currentView, setCurrentView] = useState<View>("welcome");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const { branding, loading } = useBranding();
 
   if (loading) {
@@ -43,6 +45,8 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0">
         <BrandedHeader
           currentView={currentView}
+          chatOpen={chatOpen}
+          onToggleChat={() => setChatOpen(!chatOpen)}
         />
 
         <main className="flex-1 overflow-auto">
@@ -54,6 +58,14 @@ export default function App() {
           {currentView === "settings" && <SettingsView />}
         </main>
       </div>
+
+      {/* AI Chat Panel */}
+      {chatOpen && (
+        <ChatPanel
+          onClose={() => setChatOpen(false)}
+          onNavigateToSettings={() => { setCurrentView("settings"); setChatOpen(false); }}
+        />
+      )}
 
       {/* Auto-update notification */}
       <UpdateBanner />

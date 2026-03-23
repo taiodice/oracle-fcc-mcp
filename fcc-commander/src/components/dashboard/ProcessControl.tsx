@@ -73,7 +73,6 @@ export function ProcessControl({ dashboard }: ProcessControlProps) {
 
     setProgress({ total, done: 0, succeeded: 0, failed: 0, current: "" });
 
-    // Execute all entity×period combinations, showing real-time progress
     const allResults: BulkResult[] = [];
     let succeeded = 0;
     let failed = 0;
@@ -120,25 +119,25 @@ export function ProcessControl({ dashboard }: ProcessControlProps) {
     <div className="space-y-4">
       {/* ── No entities loaded warning ── */}
       {flatEntities.length === 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-amber-800">
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-5 py-4 text-sm text-amber-400">
           Load entity data from the <strong>Entity Hierarchy</strong> tab first, then select entities there to use here.
         </div>
       )}
 
       {/* ── Action Panel ── */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/40 flex items-center justify-between">
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--color-border)] bg-white/5 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">Bulk Approval Actions</h3>
-            <p className="text-xs text-slate-400 mt-px">
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">Bulk Approval Actions</h3>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-px">
               Select entities in the hierarchy, choose periods, then act on all at once
             </p>
           </div>
           {hasSelection && (
-            <div className="text-xs text-slate-500 font-data bg-white border border-slate-200 rounded-lg px-3 py-1.5">
-              <span className="font-bold text-slate-700">{selectedEntities.size}</span> entities ×{" "}
-              <span className="font-bold text-slate-700">{selectedPeriods.size}</span> periods ={" "}
-              <span className="font-bold text-amber-600">{operationCount}</span> ops
+            <div className="text-xs text-[var(--color-text-secondary)] font-data bg-white/5 border border-[var(--color-border)] rounded-lg px-3 py-1.5">
+              <span className="font-bold text-[var(--color-text)]">{selectedEntities.size}</span> entities ×{" "}
+              <span className="font-bold text-[var(--color-text)]">{selectedPeriods.size}</span> periods ={" "}
+              <span className="font-bold text-[var(--color-primary)]">{operationCount}</span> ops
             </div>
           )}
         </div>
@@ -147,7 +146,7 @@ export function ProcessControl({ dashboard }: ProcessControlProps) {
           {/* Period selector */}
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              <label className="text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
                 Periods
               </label>
               <div className="flex gap-1 ml-auto">
@@ -155,20 +154,20 @@ export function ProcessControl({ dashboard }: ProcessControlProps) {
                   <button
                     key={q}
                     onClick={() => selectQ(i)}
-                    className="text-[10px] px-2 py-0.5 rounded border border-slate-200 text-slate-400 hover:border-amber-300 hover:text-amber-600 transition-colors font-medium"
+                    className="text-[10px] px-2 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)] transition-colors font-medium"
                   >
                     {q}
                   </button>
                 ))}
                 <button
                   onClick={() => setSelectedPeriods(new Set(PERIODS))}
-                  className="text-[10px] px-2 py-0.5 rounded border border-slate-200 text-slate-400 hover:border-amber-300 hover:text-amber-600 transition-colors font-medium"
+                  className="text-[10px] px-2 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-primary)] transition-colors font-medium"
                 >
                   All
                 </button>
                 <button
                   onClick={() => setSelectedPeriods(new Set())}
-                  className="text-[10px] px-2 py-0.5 rounded border border-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="text-[10px] px-2 py-0.5 rounded border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors"
                 >
                   Clear
                 </button>
@@ -181,8 +180,8 @@ export function ProcessControl({ dashboard }: ProcessControlProps) {
                   onClick={() => togglePeriod(p)}
                   className={`px-3 py-1.5 text-xs font-data font-medium rounded-lg border transition-all duration-150 ${
                     selectedPeriods.has(p)
-                      ? "bg-amber-500 text-white border-amber-500 shadow-sm"
-                      : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                      ? "bg-[var(--color-primary)] text-[var(--color-background)] border-[var(--color-primary)] shadow-sm"
+                      : "bg-white/5 text-[var(--color-text-secondary)] border-[var(--color-border)] hover:border-[var(--color-border-hover)] hover:bg-white/10"
                   }`}
                 >
                   {p}
@@ -193,14 +192,14 @@ export function ProcessControl({ dashboard }: ProcessControlProps) {
 
           {/* Comment */}
           <div>
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
+            <label className="text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider block mb-1.5">
               Comment (optional)
             </label>
             <input
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Add a comment for the approval workflow..."
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
+              className="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg bg-white/5 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)]"
             />
           </div>
 
@@ -223,29 +222,30 @@ export function ProcessControl({ dashboard }: ProcessControlProps) {
 
       {/* ── Confirmation Dialog ── */}
       {confirmAction && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 animate-slide-up">
+        <div className="glass-elevated rounded-xl p-5 animate-slide-up">
           <div className="flex items-start gap-3">
-            <span className="text-amber-500 text-lg mt-0.5">⚠</span>
+            <span className="text-amber-400 text-lg mt-0.5">⚠</span>
             <div className="flex-1">
-              <h3 className="text-sm font-bold text-slate-800 mb-1">
+              <h3 className="text-sm font-bold text-[var(--color-text)] mb-1">
                 Confirm: {ACTIONS.find((a) => a.id === confirmAction)?.label}
               </h3>
-              <p className="text-sm text-slate-500 mb-3">
-                This will <strong>{confirmAction.replace("_", " ")}</strong>{" "}
-                <strong className="text-slate-700">{selectedEntities.size} entities</strong> across{" "}
-                <strong className="text-slate-700">{selectedPeriods.size} periods</strong>{" "}
+              <p className="text-sm text-[var(--color-text-secondary)] mb-3">
+                This will <strong className="text-[var(--color-text)]">{confirmAction.replace("_", " ")}</strong>{" "}
+                <strong className="text-[var(--color-text)]">{selectedEntities.size} entities</strong> across{" "}
+                <strong className="text-[var(--color-text)]">{selectedPeriods.size} periods</strong>{" "}
                 ({operationCount} operations). This cannot be undone.
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => runBulkAction(confirmAction)}
-                  className="px-4 py-1.5 text-sm font-semibold rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors"
+                  className="px-4 py-1.5 text-sm font-semibold rounded-lg text-white transition-colors"
+                  style={{ background: "var(--color-primary)" }}
                 >
                   Confirm
                 </button>
                 <button
                   onClick={() => setConfirmAction(null)}
-                  className="px-4 py-1.5 text-sm font-medium rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                  className="px-4 py-1.5 text-sm font-medium rounded-lg text-[var(--color-text-secondary)] bg-white/10 hover:bg-white/15 transition-colors"
                 >
                   Cancel
                 </button>
@@ -257,29 +257,29 @@ export function ProcessControl({ dashboard }: ProcessControlProps) {
 
       {/* ── Progress ── */}
       {running && progress && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 animate-slide-up">
+        <div className="glass-card rounded-xl p-5 animate-slide-up">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-slate-800">Processing...</span>
-            <span className="text-sm font-data text-slate-500">
+            <span className="text-sm font-semibold text-[var(--color-text)]">Processing...</span>
+            <span className="text-sm font-data text-[var(--color-text-secondary)]">
               {progress.done} / {progress.total}
             </span>
           </div>
 
           {/* Progress bar */}
-          <div className="h-2 bg-slate-100 rounded-full overflow-hidden mb-3">
+          <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-3">
             <div
-              className="h-full bg-amber-400 rounded-full transition-all duration-300"
-              style={{ width: `${(progress.done / progress.total) * 100}%` }}
+              className="h-full rounded-full transition-all duration-300"
+              style={{ width: `${(progress.done / progress.total) * 100}%`, background: "var(--color-primary)" }}
             />
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-data truncate max-w-[60%]">
+            <span className="text-xs text-[var(--color-text-secondary)] font-data truncate max-w-[60%]">
               {progress.current}
             </span>
             <div className="flex items-center gap-3 text-xs font-data">
-              <span className="text-emerald-600">✓ {progress.succeeded}</span>
-              {progress.failed > 0 && <span className="text-red-500">✕ {progress.failed}</span>}
+              <span className="text-emerald-400">✓ {progress.succeeded}</span>
+              {progress.failed > 0 && <span className="text-red-400">✕ {progress.failed}</span>}
             </div>
           </div>
         </div>
@@ -287,43 +287,43 @@ export function ProcessControl({ dashboard }: ProcessControlProps) {
 
       {/* ── Results ── */}
       {showResults && results.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden animate-slide-up">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50/40">
-            <h3 className="text-sm font-semibold text-slate-800">Results</h3>
+        <div className="glass-card rounded-xl overflow-hidden animate-slide-up">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border)] bg-white/5">
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">Results</h3>
             <div className="flex items-center gap-3 text-xs font-data">
-              <span className="text-emerald-600 font-semibold">
+              <span className="text-emerald-400 font-semibold">
                 ✓ {results.filter((r) => r.success).length} succeeded
               </span>
               {results.some((r) => !r.success) && (
-                <span className="text-red-500 font-semibold">
+                <span className="text-red-400 font-semibold">
                   ✕ {results.filter((r) => !r.success).length} failed
                 </span>
               )}
               <button
                 onClick={() => setShowResults(false)}
-                className="text-slate-300 hover:text-slate-500"
+                className="text-[var(--color-text-secondary)]/40 hover:text-[var(--color-text-secondary)]"
               >
                 ✕
               </button>
             </div>
           </div>
-          <div className="max-h-64 overflow-auto dark-scroll divide-y divide-slate-50">
+          <div className="max-h-64 overflow-auto dark-scroll divide-y divide-[var(--color-border)]">
             {results.map((r, i) => (
               <div
                 key={i}
                 className={`flex items-center gap-3 px-5 py-2 text-xs ${
-                  r.success ? "text-slate-600" : "bg-red-50/50 text-slate-600"
+                  r.success ? "text-[var(--color-text-secondary)]" : "bg-red-500/5 text-[var(--color-text-secondary)]"
                 }`}
               >
-                <span className={r.success ? "text-emerald-500" : "text-red-400"}>
+                <span className={r.success ? "text-emerald-400" : "text-red-400"}>
                   {r.success ? "✓" : "✕"}
                 </span>
-                <span className="font-data font-medium w-40 truncate">{r.entity}</span>
-                <span className="text-slate-300">·</span>
+                <span className="font-data font-medium w-40 truncate text-[var(--color-text)]">{r.entity}</span>
+                <span className="text-[var(--color-text-secondary)]/30">·</span>
                 <span className="font-data w-8">{r.period}</span>
-                <span className="text-slate-400 flex-1 truncate">{r.message}</span>
+                <span className="text-[var(--color-text-secondary)] flex-1 truncate">{r.message}</span>
                 {r.jobId && (
-                  <span className="text-slate-300 font-data">#{r.jobId}</span>
+                  <span className="text-[var(--color-text-secondary)]/30 font-data">#{r.jobId}</span>
                 )}
               </div>
             ))}
@@ -333,30 +333,30 @@ export function ProcessControl({ dashboard }: ProcessControlProps) {
 
       {/* ── Entity selection list ── */}
       {flatEntities.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/40 flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        <div className="glass-card rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--color-border)] bg-white/5 flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
               Selected Entities ({selectedEntities.size} of {flatEntities.length})
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[var(--color-text-secondary)]/60">
               Use checkboxes in the Entity Hierarchy tab to add/remove
             </p>
           </div>
-          <div className="max-h-48 overflow-auto dark-scroll divide-y divide-slate-50">
+          <div className="max-h-48 overflow-auto dark-scroll divide-y divide-[var(--color-border)]">
             {flatEntities.filter((e) => selectedEntities.has(e.entity)).length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-6">
+              <p className="text-xs text-[var(--color-text-secondary)] text-center py-6">
                 No entities selected — use the Entity Hierarchy tab to select them
               </p>
             ) : (
               flatEntities
                 .filter((e) => selectedEntities.has(e.entity))
                 .map((e) => (
-                  <div key={e.entity} className="flex items-center gap-3 px-5 py-2 text-xs text-slate-600">
-                    <span className="font-data font-medium flex-1">{e.entity}</span>
-                    <span className="text-slate-300">{e.status}</span>
+                  <div key={e.entity} className="flex items-center gap-3 px-5 py-2 text-xs text-[var(--color-text-secondary)]">
+                    <span className="font-data font-medium flex-1 text-[var(--color-text)]">{e.entity}</span>
+                    <span className="text-[var(--color-text-secondary)]/40">{e.status}</span>
                     <button
                       onClick={() => dashboard.toggleEntity(e.entity)}
-                      className="text-slate-300 hover:text-slate-500 transition-colors"
+                      className="text-[var(--color-text-secondary)]/40 hover:text-[var(--color-text-secondary)] transition-colors"
                     >
                       ✕
                     </button>

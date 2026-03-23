@@ -21,11 +21,10 @@ interface BulkResult {
 const PERIODS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const STATUS_CONFIG: Record<PeriodStatusType, { dot: string; badge: string; label: string }> = {
-  Opened:   { dot: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-700 border-emerald-200",  label: "Opened" },
-  Unopened: { dot: "bg-slate-300",   badge: "bg-slate-50 text-slate-500 border-slate-200",        label: "Unopened" },
+  Opened:   { dot: "bg-emerald-400", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", label: "Opened" },
+  Unopened: { dot: "bg-slate-500",   badge: "bg-white/5 text-[var(--color-text-secondary)] border-white/10", label: "Unopened" },
 };
 
-// Persist period status locally per scenario/year
 function storageKey(scenario: string, year: string) {
   return `fcc_period_status_${scenario}_${year}`;
 }
@@ -49,13 +48,11 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
   const [actionResult, setActionResult] = useState<{ success: boolean; message: string } | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Selection state for bulk operations
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkResults, setBulkResults] = useState<BulkResult[] | null>(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
-  // Load saved period statuses when filters change
   useEffect(() => {
     if (!filters.scenario || !filters.year) return;
     const saved = loadSavedStatus(filters.scenario, filters.year);
@@ -70,6 +67,33 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
     setBulkResults(null);
   }, [filters.scenario, filters.year]);
 
+  // Sync period status when AI Chat successfully calls fcc_manage_journal_period
+  useEffect(() => {
+    if (!window.fccCommander) return;
+    const unsub = window.fccCommander.onChatToolCall((data) => {
+      if (data.toolName !== "fcc_manage_journal_period") return;
+      const result = data.result as { success?: boolean } | null;
+      if (!result?.success) return;
+
+      const args = data.args as { action?: string; period?: string; year?: string; scenario?: string };
+      if (!args.period || !args.year || !args.scenario) return;
+
+      // Only update if this matches the currently displayed scenario/year
+      if (args.scenario !== filters.scenario || args.year !== filters.year) return;
+
+      const newStatus: PeriodStatusType = args.action?.toUpperCase() === "OPEN" ? "Opened" : "Unopened";
+
+      setPeriods((prev) => {
+        const updated = prev.map((p) =>
+          p.period === args.period ? { ...p, status: newStatus } : p
+        );
+        saveStatus(args.scenario!, args.year!, updated);
+        return updated;
+      });
+    });
+    return unsub;
+  }, [filters.scenario, filters.year]);
+
   function toggleSelect(period: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -78,13 +102,8 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
     });
   }
 
-  function selectAll() {
-    setSelected(new Set(PERIODS));
-  }
-
-  function clearSelection() {
-    setSelected(new Set());
-  }
+  function selectAll() { setSelected(new Set(PERIODS)); }
+  function clearSelection() { setSelected(new Set()); }
 
   const allSelected = selected.size === PERIODS.length;
   const someSelected = selected.size > 0;
@@ -147,7 +166,6 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
   async function bulkAction(action: "open" | "close") {
     if (!window.fccCommander || selected.size === 0) return;
 
-    // Sort selected periods in calendar order
     const selectedPeriods = PERIODS.filter((p) => selected.has(p));
     setBulkRunning(true);
     setBulkResults(null);
@@ -156,7 +174,6 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
 
     const results: BulkResult[] = [];
 
-    // Execute sequentially to avoid overwhelming the API
     for (let i = 0; i < selectedPeriods.length; i++) {
       const period = selectedPeriods[i];
       setBulkProgress({ done: i, total: selectedPeriods.length });
@@ -173,7 +190,6 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
         results.push({ period, success: result.success, message: result.message });
 
         if (result.success) {
-          // Update local state immediately for this period
           setPeriods((prev) => {
             const updated = prev.map((p) =>
               p.period === period
@@ -222,10 +238,10 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
 
   if (!filters.scenario || !filters.year) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm flex flex-col items-center justify-center py-20 text-slate-400">
+      <div className="glass-card rounded-xl flex flex-col items-center justify-center py-20 text-[var(--color-text-secondary)]">
         <span className="text-5xl mb-4 opacity-20">◷</span>
         <p className="text-sm font-medium">No period data</p>
-        <p className="text-xs mt-1 text-slate-300">Select a scenario and year above</p>
+        <p className="text-xs mt-1 text-[var(--color-text-secondary)]/60">Select a scenario and year above</p>
       </div>
     );
   }
@@ -233,18 +249,18 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
   return (
     <div className="space-y-4">
       {/* Header card */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/40 flex items-center justify-between">
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--color-border)] bg-white/5 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">Period Status</h3>
-            <p className="text-xs text-slate-400 mt-px">
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">Period Status</h3>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-px">
               {filters.scenario} · {filters.year} — Select periods for bulk actions, or use individual controls.
             </p>
           </div>
         </div>
 
         {/* Summary + bulk actions strip */}
-        <div className="flex items-center gap-4 px-5 py-2.5 bg-white">
+        <div className="flex items-center gap-4 px-5 py-2.5">
           {/* Status counts */}
           <div className="flex items-center gap-4">
             {Object.entries(statusCounts).map(([status, count]) => {
@@ -252,20 +268,19 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
               return (
                 <div key={status} className="flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
-                  <span className="text-xs text-slate-500">{cfg.label}</span>
-                  <span className="text-xs font-bold text-slate-700 font-data">{count}</span>
+                  <span className="text-xs text-[var(--color-text-secondary)]">{cfg.label}</span>
+                  <span className="text-xs font-bold text-[var(--color-text)] font-data">{count}</span>
                 </div>
               );
             })}
           </div>
 
-          {/* Divider */}
-          <div className="w-px h-4 bg-slate-200" />
+          <div className="w-px h-4 bg-[var(--color-border)]" />
 
           {/* Bulk action buttons */}
           {someSelected && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-data">
+              <span className="text-xs text-[var(--color-text-secondary)] font-data">
                 {selected.size} selected
               </span>
               <button
@@ -285,7 +300,7 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
               <button
                 onClick={clearSelection}
                 disabled={bulkRunning}
-                className="text-xs text-slate-400 hover:text-slate-600 px-1"
+                className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text)] px-1"
               >
                 Clear
               </button>
@@ -296,17 +311,17 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
 
       {/* Progress bar */}
       {bulkProgress && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden px-5 py-3">
+        <div className="glass-card rounded-xl overflow-hidden px-5 py-3">
           <div className="flex items-center gap-3 mb-2">
-            <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin flex-shrink-0" />
-            <span className="text-sm text-slate-600">
+            <span className="w-4 h-4 border-2 border-white/20 border-t-[var(--color-primary)] rounded-full animate-spin flex-shrink-0" />
+            <span className="text-sm text-[var(--color-text)]">
               Processing {bulkProgress.done + 1} of {bulkProgress.total}...
             </span>
           </div>
-          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
             <div
-              className="h-full bg-amber-500 rounded-full transition-all duration-300"
-              style={{ width: `${((bulkProgress.done + 1) / bulkProgress.total) * 100}%` }}
+              className="h-full rounded-full transition-all duration-300"
+              style={{ width: `${((bulkProgress.done + 1) / bulkProgress.total) * 100}%`, background: "var(--color-primary)" }}
             />
           </div>
         </div>
@@ -317,8 +332,8 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
         <div
           className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm ${
             actionResult.success
-              ? "bg-emerald-50 border-emerald-100 text-emerald-700"
-              : "bg-red-50 border-red-100 text-red-700"
+              ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20 text-[var(--color-primary)]"
+              : "bg-red-500/10 border-red-500/20 text-red-400"
           }`}
         >
           <span>{actionResult.success ? "✓" : "✗"}</span>
@@ -332,20 +347,20 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
         </div>
       )}
 
-      {/* Bulk results detail (shown only when there are failures) */}
+      {/* Bulk results detail */}
       {bulkResults && bulkResults.some((r) => !r.success) && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div className="px-5 py-2.5 border-b border-slate-100 bg-slate-50/40">
-            <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Bulk Action Results</h4>
+        <div className="glass-card rounded-xl overflow-hidden">
+          <div className="px-5 py-2.5 border-b border-[var(--color-border)] bg-white/5">
+            <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Bulk Action Results</h4>
           </div>
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-[var(--color-border)]">
             {bulkResults.map((r) => (
               <div key={r.period} className="flex items-center gap-3 px-5 py-2 text-sm">
-                <span className={r.success ? "text-emerald-500" : "text-red-500"}>
+                <span className={r.success ? "text-emerald-400" : "text-red-400"}>
                   {r.success ? "✓" : "✗"}
                 </span>
-                <span className="font-data font-medium text-slate-700 w-10">{r.period}</span>
-                <span className={`text-xs ${r.success ? "text-emerald-600" : "text-red-600"}`}>
+                <span className="font-data font-medium text-[var(--color-text)] w-10">{r.period}</span>
+                <span className={`text-xs ${r.success ? "text-emerald-400" : "text-red-400"}`}>
                   {r.message}
                 </span>
               </div>
@@ -355,7 +370,7 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
       )}
 
       {/* Info note */}
-      <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-blue-50 border border-blue-100 text-blue-800 text-xs">
+      <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs">
         <span className="flex-shrink-0 mt-0.5 font-bold">i</span>
         <div>
           <span className="font-semibold">Period status</span> is manually tracked here to match your FCC environment.
@@ -365,9 +380,9 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
       </div>
 
       {/* Period grid */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="glass-card rounded-xl overflow-hidden">
         {/* Column headers */}
-        <div className="flex items-center gap-4 px-5 py-2 border-b border-slate-100 bg-slate-50/20">
+        <div className="flex items-center gap-4 px-5 py-2 border-b border-[var(--color-border)] bg-white/5">
           <div className="w-5">
             <input
               type="checkbox"
@@ -375,16 +390,16 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
               ref={(el) => { if (el) el.indeterminate = !allSelected && someSelected; }}
               onChange={() => allSelected ? clearSelection() : selectAll()}
               disabled={bulkRunning}
-              className="accent-amber-500 cursor-pointer"
+              className="accent-[var(--color-primary)] cursor-pointer"
             />
           </div>
-          <div className="w-8 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">#</div>
-          <div className="flex-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Period</div>
-          <div className="w-28 text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center">Status</div>
-          <div className="w-44 text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right">Actions</div>
+          <div className="w-8 text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">#</div>
+          <div className="flex-1 text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Period</div>
+          <div className="w-28 text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider text-center">Status</div>
+          <div className="w-44 text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider text-right">Actions</div>
         </div>
 
-        <div className="divide-y divide-slate-50">
+        <div className="divide-y divide-[var(--color-border)]">
           {periods.map((p, idx) => {
             const cfg = STATUS_CONFIG[p.status] ?? STATUS_CONFIG.Unopened;
             const isActing = actionLoading?.startsWith(p.period);
@@ -394,7 +409,7 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
               <div
                 key={p.period}
                 className={`flex items-center gap-4 px-5 py-2.5 transition-colors group ${
-                  isSelected ? "bg-amber-50/50" : "hover:bg-slate-50/60"
+                  isSelected ? "bg-[var(--color-primary)]/5" : "hover:bg-white/5"
                 }`}
               >
                 {/* Checkbox */}
@@ -404,17 +419,17 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
                     checked={isSelected}
                     onChange={() => toggleSelect(p.period)}
                     disabled={bulkRunning}
-                    className="accent-amber-500 cursor-pointer"
+                    className="accent-[var(--color-primary)] cursor-pointer"
                   />
                 </div>
 
                 {/* Month number */}
-                <div className="w-8 text-[11px] text-slate-300 font-data">{String(idx + 1).padStart(2, "0")}</div>
+                <div className="w-8 text-[11px] text-[var(--color-text-secondary)]/40 font-data">{String(idx + 1).padStart(2, "0")}</div>
 
                 {/* Period name */}
                 <div className="flex-1 flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
-                  <span className="text-sm font-data font-medium text-slate-700">{p.period}</span>
+                  <span className="text-sm font-data font-medium text-[var(--color-text)]">{p.period}</span>
                 </div>
 
                 {/* Clickable status badge */}
@@ -433,7 +448,7 @@ export function PeriodStatus({ dashboard }: PeriodStatusProps) {
                 {/* Action button */}
                 <div className="w-44 flex items-center gap-1.5 justify-end">
                   {isActing ? (
-                    <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                    <span className="w-4 h-4 border-2 border-white/20 border-t-[var(--color-primary)] rounded-full animate-spin" />
                   ) : p.status === "Unopened" ? (
                     <button
                       onClick={() => tryManagePeriod(p.period, "open")}

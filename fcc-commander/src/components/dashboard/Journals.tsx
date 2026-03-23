@@ -23,10 +23,10 @@ interface JournalEntry {
 const STATUS_FILTERS = ["WORKING", "SUBMITTED", "APPROVED", "POSTED"] as const;
 
 const STATUS_STYLES: Record<string, { dot: string; badge: string }> = {
-  working:   { dot: "bg-amber-400",   badge: "bg-amber-50 text-amber-700 border-amber-200" },
-  submitted: { dot: "bg-blue-400",    badge: "bg-blue-50 text-blue-700 border-blue-200" },
-  approved:  { dot: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  posted:    { dot: "bg-purple-400",  badge: "bg-purple-50 text-purple-700 border-purple-200" },
+  working:   { dot: "bg-amber-400",   badge: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
+  submitted: { dot: "bg-blue-400",    badge: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  approved:  { dot: "bg-emerald-400", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
+  posted:    { dot: "bg-purple-400",  badge: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
 };
 
 const JOURNAL_ACTIONS = [
@@ -113,7 +113,6 @@ export function Journals({ dashboard }: JournalsProps) {
       });
       setActionResult({ success: result.success, message: result.message });
       if (result.success) {
-        // Reload journals to reflect new status
         await loadJournals();
       }
     } catch (err) {
@@ -128,11 +127,11 @@ export function Journals({ dashboard }: JournalsProps) {
   return (
     <div className="space-y-4">
       {/* Header card */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/40 flex items-center justify-between">
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-[var(--color-border)] bg-white/5 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">Journals</h3>
-            <p className="text-xs text-slate-400 mt-px">
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">Journals</h3>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-px">
               {canLoad
                 ? `${filters.scenario} · ${filters.year} · ${filters.period}`
                 : "Select scenario, year, and period to view journals"}
@@ -141,11 +140,11 @@ export function Journals({ dashboard }: JournalsProps) {
           <div className="flex items-center gap-3">
             {/* Status filter */}
             <div className="flex items-center gap-1.5">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</label>
+              <label className="text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Status</label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 font-data cursor-pointer"
+                className="px-2.5 py-1.5 text-sm border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] font-data cursor-pointer"
               >
                 {STATUS_FILTERS.map((s) => (
                   <option key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</option>
@@ -172,10 +171,10 @@ export function Journals({ dashboard }: JournalsProps) {
 
         {/* Summary */}
         {journals.length > 0 && (
-          <div className="flex items-center gap-4 px-5 py-2.5 bg-white">
-            <span className="text-xs text-slate-500">
-              Showing <span className="font-bold text-slate-700 font-data">{journals.length}</span> of{" "}
-              <span className="font-bold text-slate-700 font-data">{totalResults}</span> journals
+          <div className="flex items-center gap-4 px-5 py-2.5">
+            <span className="text-xs text-[var(--color-text-secondary)]">
+              Showing <span className="font-bold text-[var(--color-text)] font-data">{journals.length}</span> of{" "}
+              <span className="font-bold text-[var(--color-text)] font-data">{totalResults}</span> journals
             </span>
           </div>
         )}
@@ -183,7 +182,7 @@ export function Journals({ dashboard }: JournalsProps) {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-red-700 text-sm">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
           <span className="flex-shrink-0">✗</span> {error}
         </div>
       )}
@@ -193,8 +192,8 @@ export function Journals({ dashboard }: JournalsProps) {
         <div
           className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm ${
             actionResult.success
-              ? "bg-emerald-50 border-emerald-100 text-emerald-700"
-              : "bg-red-50 border-red-100 text-red-700"
+              ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/20 text-[var(--color-primary)]"
+              : "bg-red-500/10 border-red-500/20 text-red-400"
           }`}
         >
           <span>{actionResult.success ? "✓" : "✗"}</span>
@@ -210,10 +209,10 @@ export function Journals({ dashboard }: JournalsProps) {
 
       {/* Empty state */}
       {!loading && journals.length === 0 && !error && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm flex flex-col items-center justify-center py-20 text-slate-400">
+        <div className="glass-card rounded-xl flex flex-col items-center justify-center py-20 text-[var(--color-text-secondary)]">
           <span className="text-5xl mb-4 opacity-20">📋</span>
           <p className="text-sm font-medium">No journals loaded</p>
-          <p className="text-xs mt-1 text-slate-300">
+          <p className="text-xs mt-1 text-[var(--color-text-secondary)]/60">
             {canLoad ? "Click 'Load Journals' to fetch journals from FCC" : "Select filters above first"}
           </p>
         </div>
@@ -221,12 +220,12 @@ export function Journals({ dashboard }: JournalsProps) {
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5 space-y-3">
+        <div className="glass-card rounded-xl p-5 space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="flex items-center gap-4">
-              <div className="w-20 h-4 rounded bg-slate-100 animate-pulse" />
-              <div className="flex-1 h-4 rounded bg-slate-100 animate-pulse" />
-              <div className="w-24 h-6 rounded-full bg-slate-100 animate-pulse" />
+              <div className="w-20 h-4 rounded bg-white/10 animate-pulse" />
+              <div className="flex-1 h-4 rounded bg-white/10 animate-pulse" />
+              <div className="w-24 h-6 rounded-full bg-white/10 animate-pulse" />
             </div>
           ))}
         </div>
@@ -234,28 +233,28 @@ export function Journals({ dashboard }: JournalsProps) {
 
       {/* Journal list */}
       {!loading && journals.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           {/* Column headers */}
-          <div className="flex items-center gap-3 px-5 py-2 border-b border-slate-100 bg-slate-50/20">
-            <div className="w-28 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Label</div>
-            <div className="flex-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Description</div>
-            <div className="w-20 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Type</div>
-            <div className="w-24 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Group</div>
-            <div className="w-24 text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center">Status</div>
-            <div className="w-48 text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right">Actions</div>
+          <div className="flex items-center gap-3 px-5 py-2 border-b border-[var(--color-border)] bg-white/5">
+            <div className="w-28 text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Label</div>
+            <div className="flex-1 text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Description</div>
+            <div className="w-20 text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Type</div>
+            <div className="w-24 text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Group</div>
+            <div className="w-24 text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider text-center">Status</div>
+            <div className="w-48 text-[10px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider text-right">Actions</div>
           </div>
 
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-[var(--color-border)]">
             {journals.map((j) => {
               const statusKey = j.status.toLowerCase();
-              const styles = STATUS_STYLES[statusKey] ?? { dot: "bg-slate-300", badge: "bg-slate-50 text-slate-500 border-slate-200" };
+              const styles = STATUS_STYLES[statusKey] ?? { dot: "bg-slate-500", badge: "bg-white/5 text-[var(--color-text-secondary)] border-white/10" };
               const isActing = actionLoading?.startsWith(j.label);
               const availableActions = JOURNAL_ACTIONS.filter((a) => a.from === statusKey);
 
               return (
                 <div
                   key={j.label}
-                  className="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-50/60 transition-colors group cursor-pointer"
+                  className="flex items-center gap-3 px-5 py-2.5 hover:bg-white/5 transition-colors group cursor-pointer"
                   onClick={() => {
                     setSelectedJournal(selectedJournal?.label === j.label ? null : j);
                     if (selectedJournal?.label !== j.label) loadJournalDetail(j.label);
@@ -263,17 +262,17 @@ export function Journals({ dashboard }: JournalsProps) {
                 >
                   {/* Label */}
                   <div className="w-28">
-                    <span className="text-sm font-data font-semibold text-slate-700">{j.label}</span>
+                    <span className="text-sm font-data font-semibold text-[var(--color-text)]">{j.label}</span>
                   </div>
 
                   {/* Description */}
-                  <div className="flex-1 text-sm text-slate-500 truncate">{j.description || "—"}</div>
+                  <div className="flex-1 text-sm text-[var(--color-text-secondary)] truncate">{j.description || "—"}</div>
 
                   {/* Type */}
-                  <div className="w-20 text-xs text-slate-400 font-data">{j.journalType || "—"}</div>
+                  <div className="w-20 text-xs text-[var(--color-text-secondary)] font-data">{j.journalType || "—"}</div>
 
                   {/* Group */}
-                  <div className="w-24 text-xs text-slate-400 font-data truncate">{j.group || "—"}</div>
+                  <div className="w-24 text-xs text-[var(--color-text-secondary)] font-data truncate">{j.group || "—"}</div>
 
                   {/* Status */}
                   <div className="w-24 text-center">
@@ -286,7 +285,7 @@ export function Journals({ dashboard }: JournalsProps) {
                   {/* Actions */}
                   <div className="w-48 flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                     {isActing ? (
-                      <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                      <span className="w-4 h-4 border-2 border-white/20 border-t-[var(--color-primary)] rounded-full animate-spin" />
                     ) : (
                       availableActions.map((action) => (
                         <button
@@ -309,14 +308,14 @@ export function Journals({ dashboard }: JournalsProps) {
 
       {/* Journal detail panel */}
       {selectedJournal && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/40 flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-slate-800">
+        <div className="glass-elevated rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--color-border)] bg-white/5 flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-[var(--color-text)]">
               Journal: {selectedJournal.label}
             </h4>
             <button
               onClick={() => { setSelectedJournal(null); setJournalDetail(null); }}
-              className="text-slate-400 hover:text-slate-600 text-sm"
+              className="text-[var(--color-text-secondary)] hover:text-[var(--color-text)] text-sm"
             >
               ✕
             </button>
@@ -325,7 +324,7 @@ export function Journals({ dashboard }: JournalsProps) {
             {detailLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-4 rounded bg-slate-100 animate-pulse" style={{ width: `${60 + i * 10}%` }} />
+                  <div key={i} className="h-4 rounded bg-white/10 animate-pulse" style={{ width: `${60 + i * 10}%` }} />
                 ))}
               </div>
             ) : journalDetail ? (
@@ -334,15 +333,15 @@ export function Journals({ dashboard }: JournalsProps) {
                   .filter(([k]) => !k.startsWith("_") && k !== "journalUrl" && k !== "links")
                   .map(([key, value]) => (
                     <div key={key} className="flex gap-2">
-                      <span className="text-slate-400 font-data min-w-[120px]">{key}:</span>
-                      <span className="text-slate-700 font-data truncate">
+                      <span className="text-[var(--color-text-secondary)] font-data min-w-[120px]">{key}:</span>
+                      <span className="text-[var(--color-text)] font-data truncate">
                         {value === null ? "—" : typeof value === "object" ? JSON.stringify(value) : String(value)}
                       </span>
                     </div>
                   ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-400">No details available</p>
+              <p className="text-sm text-[var(--color-text-secondary)]">No details available</p>
             )}
           </div>
         </div>

@@ -44,21 +44,20 @@ export function registerDataTools(manager: FccClientManager, registerTool: Regis
       const suppressMissing = args.suppress_missing !== false;
 
       // Resolve plan type
-      const planType = (args.plan_type as string) || getDefaultPlanType();
+      const planType = (args.plan_type as string) || await getDefaultPlanType(client);
 
-      // Build FCC-specific POV dimensions
-      const povDimensions: string[] = ["Scenario", "Year", "Entity"];
-      const povMembers: string[][] = [[args.scenario as string], [args.year as string], [args.entity as string]];
-
-      if (args.view) { povDimensions.push("View"); povMembers.push([args.view as string]); }
-      if (args.value) { povDimensions.push("Value"); povMembers.push([args.value as string]); }
+      // Build FCC-specific POV — must include ALL required FCCS dimensions not on rows/columns
+      const povDimensions: string[] = ["Scenario", "Year", "Entity", "View", "Value"];
+      const povMembers: string[][] = [
+        [args.scenario as string],
+        [args.year as string],
+        [args.entity as string],
+        [args.view as string || "Periodic"],
+        [args.value as string || "Entity Input"],
+      ];
 
       // Periods as columns
       const periods = Array.isArray(args.period) ? args.period as string[] : [args.period as string];
-
-      // FCCS requires View and Value in POV — add defaults if not specified
-      if (!args.view) { povDimensions.push("View"); povMembers.push(["Periodic"]); }
-      if (!args.value) { povDimensions.push("Value"); povMembers.push(["Entity Input"]); }
 
       const gridDef = {
         exportPlanningData: false,
@@ -103,7 +102,7 @@ export function registerDataTools(manager: FccClientManager, registerTool: Regis
     },
     async (args) => {
       const client = manager.getClient(args.tenant as string | undefined);
-      const planType = (args.plan_type as string) || getDefaultPlanType();
+      const planType = (args.plan_type as string) || await getDefaultPlanType(client);
 
       const payload = {
         exportPlanningData: false,
@@ -150,7 +149,7 @@ export function registerDataTools(manager: FccClientManager, registerTool: Regis
     },
     async (args) => {
       const client = manager.getClient(args.tenant as string | undefined);
-      const planType = (args.plan_type as string) || getDefaultPlanType();
+      const planType = (args.plan_type as string) || await getDefaultPlanType(client);
 
       const payload = {
         aggregateEssbaseData: args.aggregate ?? false,
@@ -260,7 +259,8 @@ export function registerDataTools(manager: FccClientManager, registerTool: Regis
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getDefaultPlanType(): string {
-  // FCCS plan type is always "Consol" — no /plantypes endpoint exists
+async function getDefaultPlanType(_client: import("../fcc-client.js").FccClient): Promise<string> {
+  // The /plantypes endpoint does not exist in FCCS REST API.
+  // FCCS applications use "Consol" as the default plan type.
   return "Consol";
 }

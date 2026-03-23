@@ -195,6 +195,10 @@ export class FccClient {
   interopPath(suffix: string = ""): string {
     return `/interop/rest/11.1.2.3.600${suffix}`;
   }
+
+  fccsPath(suffix: string = ""): string {
+    return `/fccs/rest/v1${suffix}`;
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -204,6 +208,7 @@ function sanitizeUrl(url: string): string {
   let clean = url.replace(/\/$/, "");
   clean = clean.replace(/\/HyperionPlanning(\/.*)?$/, "");
   clean = clean.replace(/\/interop(\/.*)?$/, "");
+  clean = clean.replace(/\/fccs(\/.*)?$/, "");
   return clean;
 }
 

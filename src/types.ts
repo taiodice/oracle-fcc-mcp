@@ -71,3 +71,32 @@ export interface OracleError {
   detail?: string;
   localizedMessage?: string;
 }
+
+// ─── Approval / Process Control Types ─────────────────────────────────────────
+
+export interface ApprovalUnitRecord {
+  entity: string;
+  scenario: string;
+  year: string;
+  period: string;
+  status: string; // "Not Started" | "Under Review" | "First Pass" | "Approved" | "Published" | "Locked"
+  currentOwner: string;
+  promotionLevel: number;
+  parent?: string;
+}
+
+export interface ApprovalTreeNode {
+  entity: string;
+  status: string;
+  currentOwner: string;
+  promotionLevel: number;
+  children: ApprovalTreeNode[];
+}
+
+export interface BulkApprovalResult {
+  period: string;
+  entity: string;
+  success: boolean;
+  message: string;
+  jobId?: number;
+}
