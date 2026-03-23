@@ -1,0 +1,31 @@
+{
+  "appName": "FCC Commander",
+  "shortName": "FCC Commander",
+  "companyName": "CaptainEPM",
+  "logo": "./logo.png",
+  "icon": "./icon.ico",
+  "colors": {
+    "primary": "#1565C0",
+    "primaryLight": "#1E88E5",
+    "accent": "#00BCD4",
+    "coral": "#F4845F",
+    "success": "#00C9A7",
+    "warning": "#F4845F",
+    "error": "#FF5252",
+    "background": "#07111F",
+    "surface": "#0D1B2E",
+    "surfaceElevated": "#122340",
+    "sidebar": "#050C18",
+    "sidebarText": "#B4CCE5",
+    "text": "#E2EBF5",
+    "textSecondary": "#7096B8"
+  },
+  "fonts": {
+    "heading": "IBM Plex Sans",
+    "body": "IBM Plex Sans"
+  },
+  "welcome": {
+    "title": "FCC Commander",
+    "subtitle": "Your Oracle EPM Command Center — AI-powered Financial Consolidation & Close"
+  }
+}

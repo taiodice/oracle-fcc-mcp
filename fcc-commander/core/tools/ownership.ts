@@ -219,7 +219,7 @@ export function registerOwnershipTools(manager: FccClientManager, registerTool: 
     async (args) => {
       const client = manager.getClient(args.tenant as string | undefined);
       const depth = (args.depth as number) ?? 1;
-      const parentEntity = (args.parent_entity as string) || "Total Geography";
+      const parentEntity = (args.parent_entity as string) || await client.discoverRootEntity();
 
       // First try: use the single-member GET endpoint to get the entity and its children
       try {

@@ -1,0 +1,53 @@
+appId: com.captainepm.fcc-commander
+productName: FCC Commander
+copyright: Copyright © 2025 CaptainEPM
+
+directories:
+  output: release
+  buildResources: branding/default
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - "!dist-electron/**/*.map"
+  - core/**/*.js
+  - "!core/**/*.ts"
+  - core/**/*.d.ts
+  - branding/default/**/*
+  - package.json
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: branding/default/icon.ico
+  artifactName: "${productName}-Setup-${version}.${ext}"
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: FCC Commander
+  deleteAppDataOnUninstall: false
+
+compression: maximum
+
+publish:
+  provider: generic
+  url: https://updates.captainepm.com/fcc-commander
+  channel: latest
+
+mac:
+  target: dmg
+  category: public.app-category.finance
+  icon: branding/default/icon.icns
+
+linux:
+  target: AppImage
+  category: Finance
+  icon: branding/default/icon.png

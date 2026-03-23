@@ -78,6 +78,11 @@ export class FccClient {
     return this.request<T>("POST", path, body);
   }
 
+  /** POST without a body — used for endpoints that accept filters in the query string only. */
+  async postNoBody<T>(path: string): Promise<T> {
+    return this.request<T>("POST", path);
+  }
+
   async put<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>("PUT", path, body);
   }
@@ -199,13 +204,131 @@ export class FccClient {
   fccsPath(suffix: string = ""): string {
     return `/fccs/rest/v1${suffix}`;
   }
+
+  // ─── Root Entity Discovery ──────────────────────────────────────────────────
+
+  private rootEntityCache: string | null = null;
+
+  /**
+   * Dynamically discover the root entity member name for this FCCS application.
+   * Tries the dimension metadata endpoint first, then probes common candidate names.
+   * The result is cached for the lifetime of this client instance.
+   */
+  async discoverRootEntity(): Promise<string> {
+    if (this.rootEntityCache) return this.rootEntityCache;
+
+    // Strategy 1: Query /dimensions/Entity for dimension info with root member
+    try {
+      const res = await this.get<{
+        rootMember?: string;
+        rootMemberName?: string;
+        name?: string;
+        items?: Array<{ memberName?: string; name?: string; parent?: string; generation?: number }>;
+        members?: Array<{ memberName?: string; name?: string; parent?: string; generation?: number }>;
+      }>(
+        this.appPath("/dimensions/Entity")
+      );
+
+      // Check direct root member field
+      const root = res.rootMember || res.rootMemberName;
+      if (root) {
+        this.rootEntityCache = root;
+        return this.rootEntityCache;
+      }
+
+      // Check if items/members returned — find root (no parent or generation 0)
+      const members = res.items || res.members;
+      if (Array.isArray(members) && members.length > 0) {
+        const rootMember = members.find((m) => !m.parent || m.generation === 0);
+        const name = rootMember
+          ? (rootMember.memberName || rootMember.name)
+          : (members[0].memberName || members[0].name);
+        if (name) {
+          this.rootEntityCache = name;
+          return this.rootEntityCache;
+        }
+      }
+    } catch { /* continue to fallback strategies */ }
+
+    // Strategy 2: Try common FCCS root entity member names by probing
+    const candidates = [
+      "FCCS_Total Entity",
+      "Total Geography",
+      "Total Entity",
+      "FCCS_Entity",
+      "Entity",
+      this.app,
+    ];
+
+    for (const candidate of candidates) {
+      try {
+        const res = await this.get<{ memberName?: string; children?: unknown[] }>(
+          this.appPath(`/dimensions/Entity/members/${encodeURIComponent(candidate)}`)
+        );
+        // Verify this looks like a real parent (has children)
+        if (res.memberName || res.children) {
+          this.rootEntityCache = candidate;
+          return this.rootEntityCache;
+        }
+      } catch { /* try next candidate */ }
+    }
+
+    // Strategy 3: Use substitution variables to get current POV, then exportdataslice
+    try {
+      // Get substitution variables for current year/period
+      const subVars = await this.get<{ items?: Array<{ name: string; value: string }> }>(
+        this.appPath("/substitutionvariables")
+      );
+      const vars = subVars.items || [];
+      const curYear = vars.find((v) => /curyear/i.test(v.name))?.value || "FY25";
+      const curPeriod = vars.find((v) => /curperiod/i.test(v.name))?.value || "Jan";
+
+      const gridDef = {
+        exportPlanningData: false,
+        gridDefinition: {
+          suppressMissingBlocks: true,
+          suppressMissingRows: false,
+          suppressMissingColumns: true,
+          pov: {
+            dimensions: ["Scenario", "Year", "Period", "View", "Value"],
+            members: [["Actual"], [curYear], [curPeriod], ["Periodic"], ["Entity Input"]],
+          },
+          columns: [{ dimensions: ["Account"], members: [["FCCS_Total Assets"]] }],
+          rows: [{ dimensions: ["Entity"], members: [["ILvl0Descendants(Entity)"]] }],
+        },
+      };
+
+      const sliceRes = await this.post<{
+        rows?: Array<{ headers?: string[] }>;
+      }>(
+        this.planPath("Consol", "/exportdataslice"),
+        gridDef
+      );
+
+      if (sliceRes.rows && sliceRes.rows.length > 0) {
+        const firstEntity = sliceRes.rows[0].headers?.[0];
+        if (firstEntity) {
+          this.rootEntityCache = firstEntity;
+          return this.rootEntityCache;
+        }
+      }
+    } catch { /* continue to final fallback */ }
+
+    // Final fallback — return a commonly used root
+    return "Total Geography";
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function sanitizeUrl(url: string): string {
+  let clean = url.trim();
+  // Ensure https:// protocol prefix
+  if (!/^https?:\/\//i.test(clean)) {
+    clean = `https://${clean}`;
+  }
   // Strip trailing slashes and common suffixes users might include
-  let clean = url.replace(/\/$/, "");
+  clean = clean.replace(/\/$/, "");
   clean = clean.replace(/\/HyperionPlanning(\/.*)?$/, "");
   clean = clean.replace(/\/interop(\/.*)?$/, "");
   clean = clean.replace(/\/fccs(\/.*)?$/, "");

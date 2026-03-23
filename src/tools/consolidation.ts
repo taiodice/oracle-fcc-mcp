@@ -92,6 +92,9 @@ export function registerConsolidationTools(manager: FccClientManager, registerTo
     async (args) => {
       const client = manager.getClient(args.tenant as string | undefined);
 
+      // Use "Consol" plan type — the /plantypes endpoint does not exist in FCCS
+      const planType = "Consol";
+
       const entities = args.entities as string[];
       const gridDef = {
         exportPlanningData: false,
@@ -101,7 +104,13 @@ export function registerConsolidationTools(manager: FccClientManager, registerTo
           suppressMissingColumns: true,
           pov: {
             dimensions: ["Scenario", "Year", "Period", "View", "Value"],
-            members: [[args.scenario], [args.year], [args.period], ["Periodic"], ["Entity Input"]],
+            members: [
+              [args.scenario as string],
+              [args.year as string],
+              [args.period as string],
+              ["Periodic"],
+              ["Entity Input"],
+            ],
           },
           rows: [{ dimensions: ["Entity"], members: [entities] }],
           columns: [{ dimensions: ["Account"], members: [["FCCS_Total Assets"]] }],
@@ -110,7 +119,7 @@ export function registerConsolidationTools(manager: FccClientManager, registerTo
 
       try {
         const res = await client.post<unknown>(
-          client.planPath("Consol", "/exportdataslice"),
+          client.planPath(planType, "/exportdataslice"),
           gridDef
         );
         return {

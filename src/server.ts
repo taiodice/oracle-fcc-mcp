@@ -19,6 +19,7 @@ import { registerOwnershipTools } from "./tools/ownership.js";
 import { registerIntercompanyTools } from "./tools/intercompany.js";
 import { registerMetadataTools } from "./tools/metadata.js";
 import { registerJobTools } from "./tools/jobs.js";
+import { registerApprovalTools } from "./tools/approval.js";
 
 interface RegisteredTool {
   name: string;
@@ -54,6 +55,7 @@ export async function createServer(manager: FccClientManager): Promise<Server> {
   registerIntercompanyTools(manager, registerTool);
   registerMetadataTools(manager, registerTool);
   registerJobTools(manager, registerTool);
+  registerApprovalTools(manager, registerTool);
 
   // ─── List Tools Handler ──────────────────────────────────────────────────
   server.setRequestHandler(ListToolsRequestSchema, async () => ({

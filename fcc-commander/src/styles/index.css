@@ -1,0 +1,289 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* CaptainEPM Official Brand Colors — from captain-epm-branding-kit.html */
+  --color-primary: #19C5A3;
+  --color-primary-light: #2DE5A5;
+  --color-accent: #19C5A3;
+  --color-teal: #19C5A3;
+  --color-seafoam: #2DE5A5;
+  --color-success: #19C5A3;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-background: #020C15;
+  --color-surface: #0A1628;
+  --color-surface-elevated: #10243E;
+  --color-sidebar: #020C15;
+  --color-sidebar-text: #94A3B8;
+  --color-text: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-border: rgba(25, 197, 163, 0.1);
+  --color-border-hover: rgba(25, 197, 163, 0.25);
+
+  /* Fonts — matches CaptainEPM branding kit */
+  --font-heading: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Spacing */
+  --sidebar-width: 256px;
+  --sidebar-collapsed-width: 68px;
+  --header-height: 54px;
+  --chat-panel-width: 420px;
+
+  /* Glow effects */
+  --glow-primary: 0 0 20px rgba(25, 197, 163, 0.3);
+  --glow-accent: 0 0 20px rgba(45, 229, 165, 0.2);
+  --teal-glow: rgba(25, 197, 163, 0.15);
+}
+
+/* ─── Base ──────────────────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--color-background);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbar ────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(112, 150, 184, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(112, 150, 184, 0.4);
+}
+
+.dark-scroll::-webkit-scrollbar-thumb {
+  background: rgba(180, 204, 229, 0.1);
+}
+
+.dark-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(180, 204, 229, 0.2);
+}
+
+/* ─── Animations ───────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-12px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(12px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 188, 212, 0.3); }
+  50% { box-shadow: 0 0 16px 4px rgba(0, 188, 212, 0.12); }
+}
+
+@keyframes ocean-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Official CaptainEPM Logo Animations ──────────────────── */
+
+/* Gentle vertical float — used on the hero welcome logo */
+@keyframes capt-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
+
+/* Sail flutter — subtle skew on the sail paths */
+@keyframes capt-sail {
+  0%, 100% { transform: skewX(0deg); }
+  50%       { transform: skewX(2deg); }
+}
+
+/* Pulse glow — used on app icon/loading states */
+@keyframes capt-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(25, 197, 163, 0.4)); }
+  50%       { filter: drop-shadow(0 0 12px rgba(25, 197, 163, 0.7)); }
+}
+
+.logo-float  { animation: capt-float 4s ease-in-out infinite; }
+.logo-glow   { animation: capt-glow  2s ease-in-out infinite; }
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slide-left {
+  animation: slideInLeft 0.25s ease-out forwards;
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.25s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideInUp 0.3s ease-out forwards;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 2s linear infinite;
+}
+
+/* ─── Status Colors ────────────────────────────────────────────── */
+
+.status-approved   { color: #00C9A7; }
+.status-published  { color: #00C9A7; }
+.status-under-review { color: #1E88E5; }
+.status-first-pass { color: #F4845F; }
+.status-not-started { color: #7096B8; }
+.status-locked     { color: #FF5252; }
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-dot-approved,
+.status-dot-published  { background: #00C9A7; box-shadow: 0 0 6px rgba(0,201,167,0.5); }
+.status-dot-under-review { background: #1E88E5; }
+.status-dot-first-pass { background: #F4845F; }
+.status-dot-not-started { background: #7096B8; }
+.status-dot-locked     { background: #FF5252; }
+
+/* ─── Ocean Grid Pattern ───────────────────────────────────────── */
+
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(21, 101, 192, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(21, 101, 192, 0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* ─── Ocean Gradient Background ────────────────────────────────── */
+
+.ocean-gradient {
+  background: linear-gradient(180deg, #020C15 0%, #0A1628 50%, #10243E 100%);
+}
+
+.ocean-glow {
+  background: radial-gradient(ellipse at top left, rgba(25, 197, 163, 0.1) 0%, transparent 60%),
+              radial-gradient(ellipse at bottom right, rgba(45, 229, 165, 0.06) 0%, transparent 60%);
+}
+
+/* ─── Glassmorphism — Dark Mode ────────────────────────────────── */
+
+.glass {
+  background: rgba(10, 22, 40, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(25, 197, 163, 0.08);
+}
+
+.glass-elevated {
+  background: rgba(16, 36, 62, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(25, 197, 163, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(25, 197, 163, 0.05) inset;
+}
+
+.glass-card {
+  background: rgba(10, 22, 40, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(25, 197, 163, 0.08);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glass-card:hover {
+  border-color: rgba(25, 197, 163, 0.25);
+  box-shadow: 0 0 0 1px rgba(25, 197, 163, 0.1), 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Text Gradient ────────────────────────────────────────────── */
+
+.text-gradient-ocean {
+  background: linear-gradient(135deg, #19C5A3, #2DE5A5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-brand {
+  background: linear-gradient(135deg, #5EEAD4, #0D9488);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Glow Buttons ─────────────────────────────────────────────── */
+
+.btn-ocean {
+  background: linear-gradient(135deg, #19C5A3, #2DE5A5);
+  color: #020C15;
+  box-shadow: 0 4px 16px rgba(25, 197, 163, 0.35);
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.btn-ocean:hover {
+  box-shadow: 0 6px 24px rgba(25, 197, 163, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-ocean:active {
+  transform: translateY(0);
+}
+
+/* ─── Data Mono ────────────────────────────────────────────────── */
+
+.font-data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ─── Captain Badge ────────────────────────────────────────────── */
+
+.captain-badge {
+  background: rgba(25, 197, 163, 0.1);
+  border: 1px solid rgba(25, 197, 163, 0.2);
+  color: #19C5A3;
+}
